@@ -90,13 +90,46 @@ const state = ref<PdfFlipbookState>()
 | 方法 | 说明 |
 | --- | --- |
 | `next()` / `previous()` | 翻到下一组 / 上一组页面 |
-| `goToPage(page)` | 先准备目标及动画必需页面再启动翻页，返回 `Promise<void>`（不等待动画结束）；页码从 1 开始 |
+| `goToPage(page)` | 跳转到指定页，参数必须为大于 0 且不超过总页数的整数；返回 `Promise<void>`（不等待动画结束） |
 | `setMode(mode)` | 切换单 / 双页，返回 `Promise<void>` |
 | `reload()` | 重新加载当前 URL，返回 `Promise<void>`，错误通过事件报告 |
 | `getState()` | 获取当前状态快照 |
 | `getDocument()` | 获取 `PDFDocumentProxy`，未加载时为 `undefined` |
 
 文档由组件管理，外部不要调用 `destroy()` 或 `cleanup()`。URL 变化、重新加载或组件卸载后应丢弃旧引用；Vue 中使用 `shallowRef` 保存代理对象。
+
+外部项目通过组件 ref 调用跳页，建议在 `loaded` 事件之后调用：
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { VuePdfFlipbook } from '@agilehub/vue-pdf-flipbook'
+import type { PdfFlipbookExpose } from '@agilehub/vue-pdf-flipbook'
+import '@agilehub/vue-pdf-flipbook/style.css'
+
+const reader = ref<PdfFlipbookExpose>()
+const targetPage = ref(1)
+const jumpError = ref('')
+
+async function jump() {
+  jumpError.value = ''
+  await reader.value?.goToPage(targetPage.value)
+}
+
+function onError(error: unknown) {
+  jumpError.value = error instanceof Error ? error.message : String(error)
+}
+</script>
+
+<template>
+  <VuePdfFlipbook ref="reader" url="https://example.com/catalog.pdf" :height="720" @error="onError" />
+  <input v-model.number="targetPage" type="number" min="1" step="1" />
+  <button @click="jump">跳转</button>
+  <p v-if="jumpError">{{ jumpError }}</p>
+</template>
+```
+
+组件会在运行时严格校验：`0`、负数、小数、`NaN`、`Infinity`、字符串和超过总页数的值均不跳转，也不会取消已有的有效跳页请求，并通过 `error` 事件报告 `RangeError`（Promise 正常结束）。不再将非法值自动取整或调整到首尾页。双页模式显示包含目标页的那一组页面；目标页已经可见时无需翻动。
 
 ## 大文件按需预览
 
@@ -202,4 +235,3 @@ npm run test:package
 ## License
 
 MIT
-

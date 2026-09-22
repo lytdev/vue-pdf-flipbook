@@ -122,7 +122,7 @@ export function usePageNavigation(options: NavigationOptions) {
 
   /**
    * 将输入页码取整并限制在文档范围内。
-   * 调用逻辑：初始化、程序跳页及引擎同步共用此校验。
+   * 调用逻辑：初始化及引擎同步使用；对外跳页采用严格校验。
    * @param page 待校正页码；非有限数按第 1 页处理。
    * @returns 合法的一基页码；没有文档时返回 1。
    */
@@ -146,14 +146,18 @@ export function usePageNavigation(options: NavigationOptions) {
   /**
    * 统一处理程序跳页：防抖、准备动画必需页、启动翻页。
    * 调用逻辑：实例 API、翻页按钮、进度条和缩略图调用；新请求替换未执行的旧请求。
-   * @param page 目标页码，从 1 开始，内部自动校正范围。
+   * @param page 目标页码，必须是大于 0 且不超过总页数的整数。
    * @returns Promise<void>；动画启动或请求取消/忽略后结束，不等待动画播放完成。
    */
   async function goToPage(page: number) {
+    if (!Number.isInteger(page) || page <= 0 || page > pageCount.value) {
+      options.onError(new RangeError('跳转页码必须是大于 0 且不超过总页数的整数'))
+      return
+    }
     if (!engine.isReady() || loading.value || flipping) return
     // 替换目标前保留挂载窗口，防止 Vue 复用 Canvas 时丢失已渲染记录。
     cancelPreparation(false)
-    const target = clampPage(page)
+    const target = page
     if (visiblePages.value.includes(target)) {
       pendingPage.value = undefined
       return

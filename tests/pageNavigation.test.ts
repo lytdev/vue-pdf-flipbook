@@ -33,15 +33,63 @@ function createReader(debounceMs = 0) {
   return { scope, navigation, flips, errors, changes, renderWindow, loading, pageCount }
 }
 
+test('goToPage rejects invalid runtime values without changing navigation', async (t) => {
+  const reader = createReader()
+  t.after(() => reader.scope.stop())
+  for (const value of [0, -1, 1.5, 151, NaN, Infinity, -Infinity, '2', null, undefined]) {
+    await reader.navigation.goToPage(value as number)
+    assert.ok(reader.errors.at(-1) instanceof RangeError)
+    assert.equal(reader.navigation.currentPage.value, 1)
+    assert.equal(reader.navigation.pendingPage.value, undefined)
+    assert.equal(reader.navigation.pageLoading.value, false)
+  }
+  assert.equal(reader.errors.length, 10)
+  assert.deepEqual(reader.flips, [])
+  reader.pageCount.value = 0
+  await reader.navigation.goToPage(1)
+  assert.equal(reader.errors.length, 11)
+})
+
+test('goToPage accepts the first and last page', async (t) => {
+  const reader = createReader()
+  t.after(() => reader.scope.stop())
+  const last = reader.navigation.goToPage(150)
+  reader.renderWindow(150)
+  await last
+  reader.navigation.syncCurrentPage(149)
+  const first = reader.navigation.goToPage(1)
+  reader.renderWindow(1)
+  await first
+  assert.deepEqual(reader.flips, [149, 0])
+  assert.deepEqual(reader.errors, [])
+})
+
+test('invalid jumps do not cancel a valid debounced or preparing jump', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const reader = createReader(150)
+  t.after(() => reader.scope.stop())
+  const pending = reader.navigation.goToPage(40)
+  await reader.navigation.goToPage(0)
+  t.mock.timers.tick(150)
+  await nextTick()
+  assert.equal(reader.navigation.pendingPage.value, 40)
+  await reader.navigation.goToPage(151)
+  assert.equal(reader.navigation.pendingPage.value, 40)
+  assert.equal(reader.navigation.pageLoading.value, true)
+  reader.renderWindow(40)
+  await pending
+  assert.deepEqual(reader.flips, [39])
+})
+
 test('rapid next clicks debounce into one turn after the last click', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const reader = createReader(100)
   t.after(() => reader.scope.stop())
   reader.renderWindow(1)
   reader.navigation.next()
-  t.mock.timers.tick(200)
+  t.mock.timers.tick(50)
   reader.navigation.next()
-  t.mock.timers.tick(249)
+  t.mock.timers.tick(99)
   await nextTick()
   assert.deepEqual(reader.flips, [])
   assert.equal(reader.navigation.pendingPage.value, undefined)

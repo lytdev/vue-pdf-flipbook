@@ -51,7 +51,7 @@ export interface PdfFlipbookExpose {
   /**
    * 请求跳页，内部依次执行防抖、必需页准备和翻页。
    * 调用逻辑：外部页码输入、缩略图或其他导航控件通过组件 ref 调用。
-   * @param page 一基目标页码，自动取整并限制范围。
+   * @param page 大于 0 且不超过总页数的整数；非法值不跳页，通过 error 事件报告 RangeError。
    * @returns Promise<void>；动画启动或请求取消/忽略后完成，不等待动画结束。
    */
   goToPage: (page: number) => Promise<void>
