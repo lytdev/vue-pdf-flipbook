@@ -11,8 +11,9 @@ import type { ReaderMode } from './types'
 export function getVisiblePages(page: number, pages: number, mode: ReaderMode): number[] {
   if (pages < 1) return []
   const current = Math.max(1, Math.min(Math.round(page), pages))
-  const first = mode === 'double' ? current - ((current - 1) % 2) : current
-  return mode === 'single' ? [first] : [first, first + 1].filter((number) => number <= pages)
+  if (mode === 'single' || current === 1) return [current]
+  const first = current - (current % 2)
+  return [first, first + 1].filter((number) => number <= pages)
 }
 
 /**
@@ -44,9 +45,9 @@ export function getTurnPages(from: number, to: number, pages: number, mode: Read
  */
 export function getPageWindow(page: number, pages: number, mode: ReaderMode): number[] {
   if (pages < 1) return []
-  const current = Math.max(1, Math.min(Math.round(page), pages))
-  const first = mode === 'double' ? current - ((current - 1) % 2) : current
-  const last = Math.min(pages, first + (mode === 'double' ? 1 : 0))
+  const visible = getVisiblePages(page, pages, mode)
+  const first = visible[0]
+  const last = visible[visible.length - 1]
   const start = Math.max(1, first - 5)
   const end = Math.min(pages, last + 5)
   return Array.from({ length: end - start + 1 }, (_, index) => start + index)

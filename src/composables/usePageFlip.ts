@@ -55,7 +55,7 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
       usePortrait: true,
       autoSize: false,
       maxShadowOpacity: 0.28,
-      showCover: false,
+      showCover: true,
       mobileScrollSupport: true,
       clickEventForward: true,
       useMouseEvents: true,

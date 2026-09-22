@@ -19,7 +19,8 @@ const props = withDefaults(
 const emit = defineEmits<FlipbookEvents>()
 defineSlots<{ thumbnail?: (props: PdfThumbnailSlotProps) => unknown }>()
 const {
-  viewport, bookStage, pageAspectRatio, flipbookElement, rootHeight, bookShellStyle,
+  viewport, bookStage, pageAspectRatio, flipbookElement, rootHeight, bookShellStyle, coverClass,
+  showPageNavigation,
   pdf, loading, pageLoading, mode, pageCount, bookRevision, renderPages, thumbnailReadyPages,
   onPageRendered, onPageError, api, thumbnailsVisible, visiblePages, canPrevious, canNext,
 } = usePdfFlipbook(props, emit)
@@ -37,7 +38,7 @@ defineExpose(api)
   >
     <div ref="viewport" class="vpf-viewport">
       <div v-if="pdf" ref="bookStage" class="vpf-book-stage" :class="`is-${mode}`">
-        <div class="vpf-book-shell" :style="bookShellStyle">
+        <div class="vpf-book-shell" :class="coverClass" :style="bookShellStyle">
           <div :key="bookRevision" ref="flipbookElement" class="vpf-flipbook">
             <article v-for="pageNumber in pageCount" :key="pageNumber" class="vpf-turn-page" :data-page="pageNumber">
               <PdfCanvasPage
@@ -52,6 +53,7 @@ defineExpose(api)
           </div>
 
           <button
+            v-if="showPageNavigation && (mode !== 'double' || !visiblePages.includes(1))"
             type="button" class="vpf-page-nav vpf-page-nav--previous"
             aria-label="上一页" title="上一页" :disabled="!canPrevious || pageLoading"
             @click.stop="api.previous()"
@@ -59,6 +61,7 @@ defineExpose(api)
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
           </button>
           <button
+            v-if="showPageNavigation && (mode !== 'double' || !visiblePages.includes(pageCount))"
             type="button" class="vpf-page-nav vpf-page-nav--next"
             aria-label="下一页" title="下一页" :disabled="!canNext || pageLoading"
             @click.stop="api.next()"

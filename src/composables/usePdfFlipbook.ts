@@ -19,6 +19,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   const flipbookElement = ref<HTMLElement>()
   const bookRevision = ref(0)
   const thumbnailsVisible = ref(false)
+  const turnState = ref('read')
 
   // 回调在 setup 完成后执行，届时文档、导航、引擎和布局模块均已创建。
   const document = usePdfDocument(props, {
@@ -31,6 +32,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     onReset() {
       navigation.reset()
       engine.destroy()
+      turnState.value = 'read'
       bookRevision.value += 1
       layout.reset()
     },
@@ -43,6 +45,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     onRangeError() {
       navigation.cancelPreparation()
       engine.destroy()
+      turnState.value = 'read'
     },
     /**
      * 文档可用后依次设置初始页、计算布局和初始化引擎。
@@ -70,7 +73,10 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   const engine = usePageFlip(flipbookElement, {
     getLayoutMode: () => layout.orientation.value,
     onFlip: (index) => navigation.syncCurrentPage(index),
-    onStateChange: (state) => navigation.onFlipStateChange(state),
+    onStateChange: (state) => {
+      turnState.value = state
+      navigation.onFlipStateChange(state)
+    },
     onOrientationChange: (mode) => navigation.onOrientationChange(mode),
     canStartUserTurn: (forward, prepare) => navigation.canStartUserTurn(forward, prepare),
   })
@@ -93,6 +99,17 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   const rootHeight = computed(() =>
     typeof props.height === 'number' ? `${props.height}px` : props.height,
   )
+
+  // 保持引擎双页尺寸，仅平移闭合的封面，开合时不重建引擎或缩放纸张。
+  const coverClass = computed(() => {
+    if (layout.orientation.value !== 'double' || ['flipping', 'user_fold'].includes(turnState.value)
+      || navigation.visiblePages.value.length !== 1) return ''
+    return navigation.currentPage.value === 1 && document.pageCount.value > 1
+      ? 'vpf-book-shell--front-cover' : 'vpf-book-shell--back-cover'
+  })
+  // 双页开合期间隐藏两侧按钮，避免页码已更新但纸张动画尚未结束时按钮提前换位。
+  const showPageNavigation = computed(() => layout.orientation.value !== 'double'
+    || !['flipping', 'user_fold'].includes(turnState.value))
 
   /**
    * 汇总各模块状态，复制可见页数组，生成对外快照。
@@ -162,7 +179,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     pageAspectRatio: computed(() => document.pageSize.value.width / document.pageSize.value.height),
     visiblePages: navigation.visiblePages,
     canPrevious: navigation.canPrevious, canNext: navigation.canNext,
-    bookShellStyle: layout.bookShellStyle,
+    bookShellStyle: layout.bookShellStyle, coverClass, showPageNavigation,
     pdf: document.pdf, loading: document.loading, pageCount: document.pageCount,
     pageLoading: navigation.pageLoading, mode: navigation.mode, activePages: navigation.activePages,
     renderPages: navigation.renderPages, thumbnailReadyPages: navigation.thumbnailReadyPages,
