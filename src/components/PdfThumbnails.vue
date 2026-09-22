@@ -16,6 +16,57 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [page: number]; error: [error: unknown] }>()
 defineSlots<{ thumbnail?: (props: PdfThumbnailSlotProps) => unknown }>()
 const container = ref<HTMLElement>()
+const dragging = ref(false)
+let startX = 0
+let startScrollLeft = 0
+let suppressClick = false
+
+function stopDrag() {
+  dragging.value = false
+  window.removeEventListener('mousemove', moveDrag)
+  window.removeEventListener('mouseup', stopDrag)
+  window.removeEventListener('blur', stopDrag)
+}
+
+function moveDrag(event: MouseEvent) {
+  const element = container.value
+  if (!element || !(event.buttons & 1)) {
+    stopDrag()
+    return
+  }
+  const distance = event.clientX - startX
+  if (!dragging.value && Math.abs(distance) < 5) return
+  dragging.value = true
+  suppressClick = true
+  event.preventDefault()
+  element.scrollLeft = startScrollLeft - distance
+}
+
+function startDrag(event: MouseEvent) {
+  if (!props.compact || event.button !== 0) return
+  stopDrag()
+  suppressClick = false
+  const element = container.value
+  if (!element) return
+  // 滚动条继续使用浏览器原生拖动；内容区拖动不冒泡到 demo 的放大平移。
+  const rect = element.getBoundingClientRect()
+  if (event.clientY >= rect.top + element.clientTop + element.clientHeight) return
+  event.stopPropagation()
+  if (element.scrollWidth <= element.clientWidth) return
+  startX = event.clientX
+  startScrollLeft = element.scrollLeft
+  window.addEventListener('mousemove', moveDrag)
+  window.addEventListener('mouseup', stopDrag)
+  window.addEventListener('blur', stopDrag)
+}
+
+function guardDragClick(event: MouseEvent) {
+  // 键盘触发的 click（detail 为 0）仍可跳页；真正拖动后的鼠标 click 被拦截。
+  if (!suppressClick || event.detail === 0) return
+  suppressClick = false
+  event.preventDefault()
+  event.stopPropagation()
+}
 // 缩略图只渲染预览窗口内已完成正文绘制的页，避免与主阅读区域争抢资源。
 const previewPages = computed(() => new Set(getPageWindow(
   props.visiblePages[0] ?? 1, props.pages,
@@ -47,11 +98,19 @@ onMounted(() => {
     resizeObserver.observe(container.value)
   }
 })
-onBeforeUnmount(() => resizeObserver?.disconnect())
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  stopDrag()
+})
 </script>
 
 <template>
-  <nav ref="container" class="vpf-thumbnails" :class="{ 'vpf-thumbnails--compact': compact }" aria-label="PDF 缩略图">
+  <nav
+    ref="container" class="vpf-thumbnails"
+    :class="{ 'vpf-thumbnails--compact': compact, 'vpf-thumbnails--dragging': dragging }"
+    aria-label="PDF 缩略图"
+    @mousedown="startDrag" @click.capture="guardDragClick"
+  >
     <button
       v-for="page in pages" :key="page" type="button" class="vpf-thumbnail"
       :aria-label="`跳转到第 ${page} 页`"

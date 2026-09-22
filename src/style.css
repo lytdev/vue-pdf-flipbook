@@ -97,6 +97,10 @@
 .vpf-default-thumbnails { position: absolute; z-index: 11; left: 0; right: 0; bottom: 0; max-height: 100%; overflow: auto; pointer-events: auto; background: rgba(237, 240, 235, 0.85); }
 .vpf-thumbnails--compact { gap: 6px; padding: 6px; max-height: none; background: transparent; align-items: flex-start; }
 .vpf-thumbnails--compact .vpf-thumbnail { flex: 0 0 30px; width: 30px; min-width: 0; padding: 0; border-width: 1px; font-size: 10px; line-height: 16px; }
+.vpf-thumbnails--compact,
+.vpf-thumbnails--compact .vpf-thumbnail { cursor: grab; user-select: none; }
+.vpf-thumbnails--dragging,
+.vpf-thumbnails--dragging .vpf-thumbnail { cursor: grabbing; }
 .vpf-book-shell { position: relative; isolation: isolate; flex: none; }
 .vpf-flipbook.stf__parent { min-width: 0 !important; min-height: 0 !important; }
 .vpf-flipbook { position: relative; width: 100%; height: 100%; }
