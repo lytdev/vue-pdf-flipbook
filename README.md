@@ -40,7 +40,7 @@ const state = ref<PdfFlipbookState>()
 
 也支持 `app.use(PdfFlipbook)` 全局注册，`PdfFlipbook` 为默认导出。
 
-发布包名为 `@agilehub/vue-pdf-flipbook`，安装和导入必须使用相同名称；`vue-pdf-flipbook` 是另一个 npm 包名。
+发布包名为 `@agilehub/vue-pdf-flipbook`，安装和导入必须使用相同名称。
 
 ## Props
 
