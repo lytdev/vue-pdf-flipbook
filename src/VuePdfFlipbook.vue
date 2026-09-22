@@ -89,4 +89,6 @@ defineExpose(api)
   </div>
 </template>
 
+<style src="./style.css"></style>
+
 

@@ -5,15 +5,15 @@
 ## 安装与使用
 
 ```bash
-npm install vue-pdf-flipbook
+npm install @agilehub/vue-pdf-flipbook
 ```
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { VuePdfFlipbook } from 'vue-pdf-flipbook'
-import type { PdfFlipbookExpose, PdfFlipbookState } from 'vue-pdf-flipbook'
-import 'vue-pdf-flipbook/style.css'
+import { VuePdfFlipbook } from '@agilehub/vue-pdf-flipbook'
+import type { PdfFlipbookExpose, PdfFlipbookState } from '@agilehub/vue-pdf-flipbook'
+import '@agilehub/vue-pdf-flipbook/style.css'
 
 const reader = ref<PdfFlipbookExpose>()
 const state = ref<PdfFlipbookState>()
@@ -36,6 +36,8 @@ const state = ref<PdfFlipbookState>()
 
 也支持 `app.use(PdfFlipbook)` 全局注册，`PdfFlipbook` 为默认导出。
 
+发布包名为 `@agilehub/vue-pdf-flipbook`，安装和导入必须使用相同名称；`vue-pdf-flipbook` 是另一个 npm 包名。
+
 ## Props
 
 | 属性 | 类型 | 默认值 | 说明 |
@@ -49,6 +51,8 @@ const state = ref<PdfFlipbookState>()
 | `workerSrc` | `string` | 内置 Worker | 自定义 PDF.js Worker URL |
 
 双页模式在空间不足时自动显示单页。`visiblePages` 反映实际显示页，而 `mode` 表示选择的模式。
+
+默认 Worker 以 data URL 内嵌在库中，与主线程 PDF.js 一起构建，不依赖业务项目的 `/assets` 路径或资源复制配置，支持 Vite 依赖预打包和子路径部署。代价是 JS 文件包含 Worker 内容。若业务 CSP 限制 data/blob 模块，可通过 `workerSrc` 指定同版本的外部 Worker 地址，并按业务 CSP 规则提供资源。
 
 ### 自适应父容器
 
@@ -186,15 +190,15 @@ npm run typecheck
 npm test
 npm run build
 npm run pack:check
+npm run test:package
 ```
 
 `npm test` 使用 Node.js 原生测试运行器，需要 Node.js 22.15+，覆盖页面窗口、网络分段以及异步跳页的等待、替换、失败和取消场景。
 
+`npm pack` 和 `npm publish` 会通过 `prepack` 自动重新构建，避免发布旧产物。`npm run test:package` 解包实际 tarball，验证发布入口文件、组件和类型导入以及样式入口。
+
 ## License
 
 MIT
-
-
-
 
 

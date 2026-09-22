@@ -1,6 +1,5 @@
 import type { App, Plugin } from 'vue'
 import VuePdfFlipbook from './VuePdfFlipbook.vue'
-import './style.css'
 
 export type { PdfFlipbookExpose, PdfFlipbookProps, PdfFlipbookState, PdfThumbnailSlotProps, ReaderMode } from './types'
 export { VuePdfFlipbook }

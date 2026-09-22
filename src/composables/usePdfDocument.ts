@@ -1,7 +1,7 @@
 import { onScopeDispose, readonly, ref, shallowReadonly, shallowRef } from 'vue'
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import type { OnProgressParameters, PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url&no-inline'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url&inline'
 import { createPdfRangeTransport } from '../pdfRangeTransport'
 import { rangeChunkSize } from '../rangeSource'
 import type { PageSize, ResolvedFlipbookProps } from './types'
