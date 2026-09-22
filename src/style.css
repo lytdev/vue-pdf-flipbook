@@ -129,6 +129,34 @@
   border-radius: 0 5px 5px 0;
 }
 
+/* 书脊阴影附着在纸张内侧，随引擎的页面变换一起翻动。
+   使用实际展开方向，窄容器自动切换单页时不显示。 */
+.vpf-flipbook .stf__wrapper.--landscape .vpf-turn-page::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 12%;
+  max-width: 56px;
+  pointer-events: none;
+  background: linear-gradient(to right,
+    rgba(20, 24, 28, 0.24) 0%,
+    rgba(20, 24, 28, 0.13) 18%,
+    rgba(20, 24, 28, 0.055) 46%,
+    rgba(20, 24, 28, 0.015) 72%,
+    transparent 100%);
+}
+
+.vpf-flipbook .stf__wrapper.--landscape .vpf-turn-page.--left::after {
+  right: 0;
+  transform: scaleX(-1);
+}
+
+.vpf-flipbook .stf__wrapper.--landscape .vpf-turn-page.--right::after {
+  left: 0;
+}
+
 .vpf-book-stage.is-single .vpf-turn-page {
   border-radius: 5px;
 }
