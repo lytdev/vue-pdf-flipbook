@@ -90,6 +90,7 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     pageFlip.on('flip', ({ data }) => events.onFlip(Number(data)))
     pageFlip.on('changeState', ({ data }) => {
       engineState = String(data)
+      if (engineState === 'read' && pageFlip) pageFlip.getSettings().flippingTime = 820
       events.onStateChange(engineState)
     })
     pageFlip.on('changeOrientation', ({ data }) => {
@@ -165,6 +166,14 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     isReady: () => pageFlip !== undefined,
     update,
     /** 导航准备完成后调用；pageIndex 为零基目标索引，corner 为起翻页角；返回 void。 */
-    flip: (pageIndex: number, corner: 'top' | 'bottom') => pageFlip?.flip(pageIndex, corner),
+    flip: (pageIndex: number, corner: 'top' | 'bottom') => {
+      if (!pageFlip) return
+      const current = pageFlip.getCurrentPageIndex()
+      const last = pageFlip.getPageCount() - 1
+      // 首尾跳转与封面平移采用相近节奏，保留缓起缓停。
+      pageFlip.getSettings().flippingTime = events.getLayoutMode() === 'double'
+        && (current === 0 || current === last || pageIndex === 0 || pageIndex === last) ? 780 : 820
+      pageFlip.flip(pageIndex, corner)
+    },
   }
 }

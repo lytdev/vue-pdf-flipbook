@@ -5,7 +5,7 @@ import { usePdfDocument } from './usePdfDocument'
 import { usePageFlip } from './usePageFlip'
 import { usePageNavigation } from './usePageNavigation'
 import { useBookLayout } from './useBookLayout'
-import { getPageEdges } from '../pageEdges'
+import { getPageEdgesStyle } from '../pageEdges'
 
 /**
  * 作为外观层组合文档、导航、布局与翻页引擎。
@@ -101,10 +101,10 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     typeof props.height === 'number' ? `${props.height}px` : props.height,
   )
 
-  const pageEdgesStyle = computed(() => {
-    const edges = getPageEdges(navigation.currentPage.value, document.pageCount.value, layout.orientation.value)
-    return { '--vpf-edge-left': `${edges.left}px`, '--vpf-edge-right': `${edges.right}px` }
-  })
+  const pageEdgesStyle = computed(() => getPageEdgesStyle(
+    navigation.currentPage.value, document.pageCount.value, layout.orientation.value,
+    navigation.pendingPage.value, turnState.value,
+  ))
 
   // 保持引擎双页尺寸，仅平移闭合的封面，开合时不重建引擎或缩放纸张。
   const coverClass = computed(() => {

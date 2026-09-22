@@ -1,7 +1,36 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { getPageEdges, pageEdgeSpace } from '../src/pageEdges.ts'
+import { getPageEdges, getPageEdgesStyle, pageEdgeSpace } from '../src/pageEdges.ts'
 import { fitBook } from '../src/bookLayout.ts'
+
+test('first/last jumps remove the empty edge at animation start in both directions', () => {
+  for (const pages of [2, 149, 150]) {
+    for (const [from, to, emptySide] of [[1, pages, 'right'], [pages, 1, 'left']] as const) {
+      const before = getPageEdgesStyle(from, pages, 'double', undefined, 'read')
+      assert.deepEqual(getPageEdgesStyle(from, pages, 'double', to, 'read'), before)
+      const during = getPageEdgesStyle(from, pages, 'double', to, 'flipping')
+      assert.equal(during[`--vpf-edge-${emptySide}`], '0px')
+      assert.equal(during[`--vpf-edge-${emptySide}-visibility`], 'hidden')
+      assert.equal(during['--vpf-edges-opacity'], '0')
+      assert.equal(during['--vpf-edges-transition'], 'none')
+      const settled = getPageEdgesStyle(to, pages, 'double', undefined, 'read')
+      assert.equal(settled['--vpf-edges-opacity'], '1')
+      assert.equal(settled['--vpf-edges-transition'], 'opacity 220ms ease-in-out max(0ms, calc(var(--vpf-cover-duration) - 320ms))')
+      assert.equal(during['--vpf-edge-left'], settled['--vpf-edge-left'])
+      assert.equal(during['--vpf-edge-right'], settled['--vpf-edge-right'])
+      // 取消动画并清除目标后，应恢复原来的纸叠。
+      assert.deepEqual(getPageEdgesStyle(from, pages, 'double', undefined, 'read'), before)
+    }
+  }
+})
+
+test('native folds keep the current stack and single mode keeps both edges hidden', () => {
+  assert.deepEqual(getPageEdgesStyle(20, 150, 'double', undefined, 'user_fold'),
+    getPageEdgesStyle(20, 150, 'double', undefined, 'read'))
+  const single = getPageEdgesStyle(1, 150, 'single', 150, 'flipping')
+  assert.equal(single['--vpf-edge-left-visibility'], 'hidden')
+  assert.equal(single['--vpf-edge-right-visibility'], 'hidden')
+})
 
 test('page edges transfer thickness from right to left across spreads', () => {
   let previous = getPageEdges(1, 150, 'double')
