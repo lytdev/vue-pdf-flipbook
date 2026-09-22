@@ -20,20 +20,29 @@ const dragging = ref(false)
 let startX = 0
 let startScrollLeft = 0
 let suppressClick = false
+let dragSession = false
+let nativeScrollbarDrag = false
 
-function stopDrag() {
+function stopDrag(event?: Event) {
+  if (dragSession && event) event.stopImmediatePropagation()
+  dragSession = false
+  nativeScrollbarDrag = false
   dragging.value = false
-  window.removeEventListener('mousemove', moveDrag)
-  window.removeEventListener('mouseup', stopDrag)
+  window.removeEventListener('mousemove', moveDrag, true)
+  window.removeEventListener('mouseup', stopDrag, true)
   window.removeEventListener('blur', stopDrag)
 }
 
 function moveDrag(event: MouseEvent) {
+  if (!dragSession) return
+  // 捕获阶段先于 PageFlip 的 window mousemove 处理，缩略图拖动期间完全隔离翻页引擎。
+  event.stopImmediatePropagation()
   const element = container.value
   if (!element || !(event.buttons & 1)) {
     stopDrag()
     return
   }
+  if (nativeScrollbarDrag) return
   const distance = event.clientX - startX
   if (!dragging.value && Math.abs(distance) < 5) return
   dragging.value = true
@@ -45,19 +54,27 @@ function moveDrag(event: MouseEvent) {
 function startDrag(event: MouseEvent) {
   if (!props.compact || event.button !== 0) return
   stopDrag()
+  event.stopPropagation()
   suppressClick = false
   const element = container.value
   if (!element) return
-  // 滚动条继续使用浏览器原生拖动；内容区拖动不冒泡到 demo 的放大平移。
+  dragSession = true
+  // 滚动条继续使用浏览器原生拖动；捕获监听只隔离翻页引擎。
   const rect = element.getBoundingClientRect()
-  if (event.clientY >= rect.top + element.clientTop + element.clientHeight) return
-  event.stopPropagation()
-  if (element.scrollWidth <= element.clientWidth) return
+  nativeScrollbarDrag = event.clientY >= rect.top + element.clientTop + element.clientHeight
   startX = event.clientX
   startScrollLeft = element.scrollLeft
-  window.addEventListener('mousemove', moveDrag)
-  window.addEventListener('mouseup', stopDrag)
+  window.addEventListener('mousemove', moveDrag, true)
+  window.addEventListener('mouseup', stopDrag, true)
   window.addEventListener('blur', stopDrag)
+}
+
+function guardThumbnailMove(event: MouseEvent) {
+  if (props.compact) event.stopPropagation()
+}
+
+function stopThumbnailInteraction(event: Event) {
+  if (props.compact) event.stopPropagation()
 }
 
 function guardDragClick(event: MouseEvent) {
@@ -109,7 +126,14 @@ onBeforeUnmount(() => {
     ref="container" class="vpf-thumbnails"
     :class="{ 'vpf-thumbnails--compact': compact, 'vpf-thumbnails--dragging': dragging }"
     aria-label="PDF 缩略图"
-    @mousedown="startDrag" @click.capture="guardDragClick"
+    @mousedown="startDrag"
+    @mousemove="guardThumbnailMove"
+    @mouseup="stopDrag"
+    @touchstart="stopThumbnailInteraction"
+    @touchmove="stopThumbnailInteraction"
+    @touchend="stopThumbnailInteraction"
+    @click.capture="guardDragClick"
+    @click="stopThumbnailInteraction"
   >
     <button
       v-for="page in pages" :key="page" type="button" class="vpf-thumbnail"
