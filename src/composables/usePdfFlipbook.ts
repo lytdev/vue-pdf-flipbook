@@ -5,6 +5,7 @@ import { usePdfDocument } from './usePdfDocument'
 import { usePageFlip } from './usePageFlip'
 import { usePageNavigation } from './usePageNavigation'
 import { useBookLayout } from './useBookLayout'
+import { getPageEdges } from '../pageEdges'
 
 /**
  * 作为外观层组合文档、导航、布局与翻页引擎。
@@ -100,6 +101,11 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     typeof props.height === 'number' ? `${props.height}px` : props.height,
   )
 
+  const pageEdgesStyle = computed(() => {
+    const edges = getPageEdges(navigation.currentPage.value, document.pageCount.value, layout.orientation.value)
+    return { '--vpf-edge-left': `${edges.left}px`, '--vpf-edge-right': `${edges.right}px` }
+  })
+
   // 保持引擎双页尺寸，仅平移闭合的封面，开合时不重建引擎或缩放纸张。
   const coverClass = computed(() => {
     if (layout.orientation.value !== 'double' || ['flipping', 'user_fold'].includes(turnState.value)
@@ -179,7 +185,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     pageAspectRatio: computed(() => document.pageSize.value.width / document.pageSize.value.height),
     visiblePages: navigation.visiblePages,
     canPrevious: navigation.canPrevious, canNext: navigation.canNext,
-    bookShellStyle: layout.bookShellStyle, coverClass, showPageNavigation,
+    bookShellStyle: layout.bookShellStyle, coverClass, showPageNavigation, pageEdgesStyle,
     pdf: document.pdf, loading: document.loading, pageCount: document.pageCount,
     pageLoading: navigation.pageLoading, mode: navigation.mode, activePages: navigation.activePages,
     renderPages: navigation.renderPages, thumbnailReadyPages: navigation.thumbnailReadyPages,

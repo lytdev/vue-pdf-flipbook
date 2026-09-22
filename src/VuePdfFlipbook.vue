@@ -20,7 +20,7 @@ const emit = defineEmits<FlipbookEvents>()
 defineSlots<{ thumbnail?: (props: PdfThumbnailSlotProps) => unknown }>()
 const {
   viewport, bookStage, pageAspectRatio, flipbookElement, rootHeight, bookShellStyle, coverClass,
-  showPageNavigation,
+  showPageNavigation, pageEdgesStyle,
   pdf, loading, pageLoading, mode, pageCount, bookRevision, renderPages, thumbnailReadyPages,
   onPageRendered, onPageError, api, thumbnailsVisible, visiblePages, canPrevious, canNext,
 } = usePdfFlipbook(props, emit)
@@ -39,6 +39,10 @@ defineExpose(api)
     <div ref="viewport" class="vpf-viewport">
       <div v-if="pdf" ref="bookStage" class="vpf-book-stage" :class="`is-${mode}`">
         <div class="vpf-book-shell" :class="coverClass" :style="bookShellStyle">
+          <div class="vpf-page-edges" :style="pageEdgesStyle" aria-hidden="true">
+            <span class="vpf-page-edge vpf-page-edge--left" />
+            <span class="vpf-page-edge vpf-page-edge--right" />
+          </div>
           <div :key="bookRevision" ref="flipbookElement" class="vpf-flipbook">
             <article v-for="pageNumber in pageCount" :key="pageNumber" class="vpf-turn-page" :data-page="pageNumber">
               <PdfCanvasPage

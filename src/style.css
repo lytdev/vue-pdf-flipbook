@@ -102,6 +102,28 @@
 .vpf-thumbnails--dragging,
 .vpf-thumbnails--dragging .vpf-thumbnail { cursor: grabbing; }
 .vpf-book-shell { position: relative; isolation: isolate; flex: none; }
+.vpf-page-edges { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.vpf-page-edge {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  background: repeating-linear-gradient(90deg, #a7aaa6 0, #e5e5df 0.7px, #fffef8 1.4px, #c4c6c0 2px);
+  filter: drop-shadow(0 1px 1px rgba(25, 31, 28, 0.2));
+  transition: width 420ms ease, left 820ms ease, right 820ms ease;
+}
+.vpf-page-edge--left {
+  right: 100%;
+  width: var(--vpf-edge-left, 0px);
+  clip-path: polygon(0 7px, 100% 0, 100% 100%, 0 calc(100% - 7px));
+}
+.vpf-page-edge--right {
+  left: 100%;
+  width: var(--vpf-edge-right, 0px);
+  clip-path: polygon(0 0, 100% 7px, 100% calc(100% - 7px), 0 100%);
+}
+.vpf-book-shell--front-cover .vpf-page-edge--right { left: 75%; }
+.vpf-book-shell--back-cover .vpf-page-edge--left { right: 75%; }
+.vpf-flipbook { z-index: 1; }
 .vpf-flipbook.stf__parent { min-width: 0 !important; min-height: 0 !important; }
 .vpf-flipbook { position: relative; width: 100%; height: 100%; }
 .vpf-flipbook { transition: transform 820ms ease; }
@@ -119,6 +141,7 @@
 .vpf-book-shell--back-cover .vpf-turn-page::after { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .vpf-flipbook { transition: none; }
+  .vpf-page-edge { transition: none; }
 }
 
 .vpf-turn-page {

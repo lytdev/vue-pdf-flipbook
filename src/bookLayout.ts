@@ -8,10 +8,12 @@ import type { ReaderMode } from './types'
  * @param pageWidth PDF 原始页宽。
  * @param pageHeight PDF 原始页高。
  * @param mode 用户选择的模式；宽度不足 520px 时双页退为单页。
+ * @param edgeSpace 双页模式每侧为纸叠预留的空间，不改变单双页断点。
  * @returns 包含书页容器 width、height 和实际 orientation 的对象。
  */
 export function fitBook(
   width: number, height: number, pageWidth: number, pageHeight: number, mode: ReaderMode,
+  edgeSpace = 0,
 ) {
   const orientation: ReaderMode = mode === 'double' && width >= 520 ? 'double' : 'single'
   if (width <= 0 || height <= 0 || pageWidth <= 0 || pageHeight <= 0) {
@@ -20,7 +22,8 @@ export function fitBook(
   const columns = orientation === 'double' ? 2 : 1
   const ratio = pageWidth / pageHeight
   // 引擎使用整数 CSS 像素测量；每页宽度取整，避免双页中缝因小数舍入漏出背景。
-  const fittedPageWidth = Math.floor(Math.min(Math.floor(width) / columns, Math.floor(height) * ratio))
+  const contentWidth = Math.max(0, width - (orientation === 'double' ? edgeSpace * 2 : 0))
+  const fittedPageWidth = Math.floor(Math.min(Math.floor(contentWidth) / columns, Math.floor(height) * ratio))
   return {
     width: fittedPageWidth * columns,
     // 高度向上取整，避免引擎为适配高度再次缩小已计算好的页宽。

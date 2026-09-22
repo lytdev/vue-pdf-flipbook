@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import type { ReaderMode } from '../types'
 import type { PageSize } from './types'
 import { fitBook } from '../bookLayout'
+import { pageEdgeSpace } from '../pageEdges'
 
 interface LayoutOptions {
   viewport: Ref<HTMLElement | undefined>
@@ -65,7 +66,7 @@ export function useBookLayout(options: LayoutOptions) {
     // 以容器内部实际可用空间适配 PDF 比例，避免内边距导致书页溢出。
     const availableWidth = Math.max(0, viewport.value.clientWidth - horizontalPadding)
     const availableHeight = Math.max(0, viewport.value.clientHeight - verticalPadding)
-    const fitted = fitBook(availableWidth, availableHeight, pageSize.value.width, pageSize.value.height, mode.value)
+    const fitted = fitBook(availableWidth, availableHeight, pageSize.value.width, pageSize.value.height, mode.value, pageEdgeSpace)
     bookDimensions.value = { width: fitted.width, height: fitted.height }
     orientation.value = fitted.orientation
   }
