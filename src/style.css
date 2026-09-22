@@ -1,0 +1,211 @@
+.vpf-reader,
+.vpf-reader * { box-sizing: border-box; }
+
+.vpf-reader {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: var(--vpf-height, 100%);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--vpf-background, transparent);
+}
+
+.vpf-viewport { position: relative; width: 100%; flex: 1; min-height: 0; overflow: hidden; }
+
+.vpf-page-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 56px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(20, 28, 27, 0.75);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, background 150ms ease;
+}
+.vpf-page-nav--previous { left: 12px; }
+.vpf-page-nav--next { right: 12px; }
+.vpf-page-nav svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vpf-viewport:hover .vpf-page-nav,
+.vpf-viewport:focus-within .vpf-page-nav { opacity: 1; pointer-events: auto; }
+.vpf-page-nav:hover:not(:disabled) { background: rgba(20, 28, 27, 0.95); }
+.vpf-page-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.vpf-viewport:hover .vpf-page-nav:disabled,
+.vpf-viewport:focus-within .vpf-page-nav:disabled { opacity: 0.35; cursor: default; }
+@media (hover: none) {
+  .vpf-page-nav { opacity: 1; pointer-events: auto; }
+  .vpf-page-nav:disabled { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vpf-page-nav { transition: none; }
+}
+
+.vpf-thumbnails { display: flex; flex: 0 0 auto; gap: 12px; overflow: auto; max-height: 35%; padding: 10px; background: #edf0eb; }
+
+.vpf-thumbnails,
+.vpf-default-thumbnails {
+  scrollbar-width: thin;
+  scrollbar-color: #a5aea8 transparent;
+}
+.vpf-thumbnails:hover,
+.vpf-thumbnails:focus-within,
+.vpf-default-thumbnails:hover { scrollbar-color: #7d8b82 transparent; }
+
+@supports selector(::-webkit-scrollbar) {
+  .vpf-thumbnails,
+  .vpf-default-thumbnails,
+  .vpf-thumbnails:hover,
+  .vpf-thumbnails:focus-within,
+  .vpf-default-thumbnails:hover { scrollbar-width: auto; scrollbar-color: auto; }
+  .vpf-thumbnails::-webkit-scrollbar,
+  .vpf-default-thumbnails::-webkit-scrollbar { width: 8px; height: 8px; }
+  .vpf-thumbnails::-webkit-scrollbar-track,
+  .vpf-default-thumbnails::-webkit-scrollbar-track { background: transparent; }
+  .vpf-thumbnails::-webkit-scrollbar-thumb,
+  .vpf-default-thumbnails::-webkit-scrollbar-thumb {
+    min-width: 32px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: #a5aea8;
+    background-clip: padding-box;
+  }
+  .vpf-thumbnails::-webkit-scrollbar-thumb:hover,
+  .vpf-default-thumbnails::-webkit-scrollbar-thumb:hover { background-color: #7d8b82; }
+  .vpf-thumbnails::-webkit-scrollbar-thumb:active,
+  .vpf-default-thumbnails::-webkit-scrollbar-thumb:active { background-color: #5f7165; }
+  .vpf-thumbnails::-webkit-scrollbar-button,
+  .vpf-default-thumbnails::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  .vpf-thumbnails::-webkit-scrollbar-corner,
+  .vpf-default-thumbnails::-webkit-scrollbar-corner { background: transparent; }
+}
+
+.vpf-thumbnail { flex: 0 0 86px; padding: 4px; border: 2px solid transparent; background: #fff; color: #333; cursor: pointer; font: inherit; }
+.vpf-thumbnail[aria-current] { border-color: #987044; }
+.vpf-thumbnail:focus-visible { outline: 2px solid #987044; outline-offset: -2px; }
+.vpf-thumbnail-preview { width: 100%; aspect-ratio: 3 / 4; background: white; }
+.vpf-book-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.vpf-default-thumbnails { position: absolute; z-index: 11; left: 0; right: 0; bottom: 0; max-height: 100%; overflow: auto; pointer-events: auto; background: rgba(237, 240, 235, 0.85); }
+.vpf-thumbnails--compact { gap: 6px; padding: 6px; max-height: none; background: transparent; align-items: flex-start; }
+.vpf-thumbnails--compact .vpf-thumbnail { flex: 0 0 30px; width: 30px; min-width: 0; padding: 0; border-width: 1px; font-size: 10px; line-height: 16px; }
+.vpf-book-shell { position: relative; isolation: isolate; flex: none; }
+.vpf-flipbook.stf__parent { min-width: 0 !important; min-height: 0 !important; }
+.vpf-flipbook { position: relative; width: 100%; height: 100%; }
+
+.vpf-turn-page {
+  position: relative;
+  overflow: hidden !important;
+  color: #545454;
+  background: #fff;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  box-shadow: inset 0 0 28px rgba(32, 38, 37, 0.06);
+}
+
+.vpf-turn-page::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background: #fff;
+  backface-visibility: hidden;
+}
+
+.vpf-turn-page.--left {
+  border-radius: 5px 0 0 5px;
+}
+
+.vpf-turn-page.--right {
+  border-radius: 0 5px 5px 0;
+}
+
+.vpf-book-stage.is-single .vpf-turn-page {
+  border-radius: 5px;
+}
+
+.vpf-flipbook.stf__parent,
+.vpf-flipbook .stf__wrapper,
+.vpf-flipbook .stf__block {
+  box-sizing: border-box;
+}
+
+.vpf-flipbook .stf__wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 单页仍使用双页翻动轨迹，裁掉隐藏的左页，避免回翻纸张悬浮在背景上。
+   使用引擎的实际方向，也覆盖双页模式在窄容器中自动切换为单页的情况。 */
+.vpf-flipbook .stf__wrapper.--portrait {
+  clip-path: inset(0);
+}
+
+/* A paper backing at the spine prevents subpixel antialiasing from revealing
+   the reader background when a centered spread lands between device pixels. */
+.vpf-flipbook .stf__wrapper.--landscape::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+}
+
+.vpf-flipbook .stf__block {
+  perspective: 2400px;
+}
+
+.vpf-flipbook .stf__item {
+  position: absolute;
+  background: #fff !important;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, clip-path;
+}
+
+.vpf-flipbook .stf__outerShadow,
+.vpf-flipbook .stf__innerShadow,
+.vpf-flipbook .stf__hardShadow,
+.vpf-flipbook .stf__hardInnerShadow {
+  pointer-events: none;
+  mix-blend-mode: normal;
+}
+
+.vpf-page-canvas {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-height: 100%;
+  background: #fff;
+}
+
+/* An opaque Canvas is black until PDF.js paints it. Keep the white page visible. */
+.vpf-page-canvas.is-rendering canvas { visibility: hidden; }
+
+.vpf-reader .stf__parent .vpf-page-canvas canvas,
+.vpf-page-canvas canvas {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+

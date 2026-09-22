@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/page-flip.d.ts",
+    "src/VuePdfFlipbook.vue",
+    "src/components/**/*.vue"
+  ],
+  "exclude": ["src/demo/**/*"]
+}
