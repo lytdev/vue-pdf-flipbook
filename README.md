@@ -49,7 +49,7 @@ const state = ref<PdfFlipbookState>()
 | `url` | `string` | 必填 | PDF URL，变化时重新加载 |
 | `fileSize` | `number` | 自动读取 `Content-Range` | PDF 原始字节数；跨域响应未暴露 `Content-Range` 时必须由文件元数据接口提供，变化时重新加载 |
 | `initialPage` | `number` | `1` | 每次加载文档的初始页码，从 1 开始 |
-| `initialMode` | `'single'` / `'double'` | `'double'` | 初始模式，后续用 `setMode()` 切换 |
+| `initialMode` | `'single'` / `'double'` | 根据 PDF 首页比例选择 | 横向页面默认单栏，纵向页面默认双栏；显式传入时优先使用指定模式，后续可用 `setMode()` 切换 |
 | `height` | `string` / `number` | `100%` | 默认填满父容器高度；数字单位为 px |
 | `background` | `string` | `'transparent'` | 背景色 |
 | `workerSrc` | `string` | 内置 Worker | 自定义 PDF.js Worker URL |

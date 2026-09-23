@@ -6,7 +6,7 @@ export interface PageSize {
 }
 
 export type ResolvedFlipbookProps = Readonly<PdfFlipbookProps & Required<Pick<
-  PdfFlipbookProps, 'initialPage' | 'initialMode' | 'height' | 'background' | 'workerSrc'
+  PdfFlipbookProps, 'initialPage' | 'height' | 'background' | 'workerSrc'
 >>>
 
 export type FlipbookEvents = {

@@ -6,6 +6,8 @@ import { usePageFlip } from './usePageFlip'
 import { usePageNavigation } from './usePageNavigation'
 import { useBookLayout } from './useBookLayout'
 import { getPageEdgesStyle } from '../pageEdges'
+import { shouldHideDefaultThumbnails } from '../thumbnailTurn'
+import { resolveInitialMode } from '../initialMode'
 
 /**
  * 作为外观层组合文档、导航、布局与翻页引擎。
@@ -57,6 +59,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
      */
     async onReady(pdf, isCurrent) {
       // 先等页面节点挂载，再计算容器尺寸；第二次 nextTick 等尺寸应用到 DOM。
+      navigation.initializeMode(resolveInitialMode(document.pageSize.value, props.initialMode))
       navigation.initializePage(props.initialPage)
       await nextTick()
       layout.fit()
@@ -85,7 +88,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   const navigation = usePageNavigation({
     pageCount: document.pageCount,
     loading: document.loading,
-    initialMode: props.initialMode,
+    initialMode: props.initialMode ?? 'double',
     engine,
     onError: (error) => emit('error', error),
     onPageChange: (page) => emit('page-change', page),
@@ -116,6 +119,11 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   // 双页开合期间隐藏两侧按钮，避免页码已更新但纸张动画尚未结束时按钮提前换位。
   const showPageNavigation = computed(() => layout.orientation.value !== 'double'
     || !['flipping', 'user_fold'].includes(turnState.value))
+  // 依据本次实际目标页组，而非当前页码，决定是否在封面开合时隐去默认缩略图。
+  const hideDefaultThumbnails = computed(() => shouldHideDefaultThumbnails(
+    navigation.currentPage.value, navigation.turnTarget.value,
+    document.pageCount.value, layout.orientation.value, turnState.value,
+  ))
 
   /**
    * 汇总各模块状态，复制可见页数组，生成对外快照。
@@ -186,6 +194,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     visiblePages: navigation.visiblePages,
     canPrevious: navigation.canPrevious, canNext: navigation.canNext,
     bookShellStyle: layout.bookShellStyle, coverClass, showPageNavigation, pageEdgesStyle,
+    hideDefaultThumbnails,
     pdf: document.pdf, loading: document.loading, pageCount: document.pageCount,
     pageLoading: navigation.pageLoading, mode: navigation.mode, activePages: navigation.activePages,
     renderPages: navigation.renderPages, thumbnailReadyPages: navigation.thumbnailReadyPages,

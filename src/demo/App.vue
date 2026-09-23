@@ -9,10 +9,10 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 const reader = ref<PdfFlipbookExpose>();
 const container = ref<HTMLElement>();
 const pdf = shallowRef<PDFDocumentProxy>();
-// 示例文件的原始大小；业务中应从文件元数据接口获取，不能使用压缩后的 HEAD 长度。
+// 示例 PDF 地址。
 const demoDocument = {
-  url: "https://oss.cxgdxjc.com/file/110/1168470/2daf6c6589a24d97930c8e2357fff25b.pdf",
-  size: 63603604,
+  //url: "https://oss.cxgdxjc.com/tmp/bd7fe1928041f3970908808e226d62bd.pdf"
+  url: "https://oss.cxgdxjc.com/file/110/1168470/2daf6c6589a24d97930c8e2357fff25b.pdf"
 };
 const url = ref(demoDocument.url);
 const activeUrl = ref(url.value);
@@ -148,9 +148,6 @@ function onKeydown(event: KeyboardEvent) {
             <VuePdfFlipbook
               ref="reader"
               :url="activeUrl"
-              :file-size="
-                activeUrl === demoDocument.url ? demoDocument.size : undefined
-              "
               height="100%"
               background="#17201f"
               @state-change="updateState"

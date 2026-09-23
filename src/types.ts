@@ -15,6 +15,7 @@ export interface PdfFlipbookProps {
   /** PDF 原始字节数；CORS 未暴露 Content-Range 时用于确定分段边界。 */
   fileSize?: number
   initialPage?: number
+  /** 未指定时根据 PDF 首页宽高选择：横向单栏，纵向双栏。 */
   initialMode?: ReaderMode
   /** 默认填满已设置高度的父容器；数值按像素处理。 */
   height?: string | number

@@ -27,6 +27,7 @@ export function usePageNavigation(options: NavigationOptions) {
   const mode = ref<ReaderMode>(options.initialMode)
   const orientation = ref<ReaderMode>('single')
   const pendingPage = ref<number>()
+  const turnTarget = ref<number>()
   const pageLoading = ref(false)
   const renderedPages = shallowReactive(new Set<number>())
   const failedPages = shallowReactive(new Set<number>())
@@ -199,6 +200,7 @@ export function usePageNavigation(options: NavigationOptions) {
     finishPreparation = undefined
     checkPreparation = undefined
     // 引擎根据目标页决定前后方向；corner 只选择起翻页角，前后统一从上角翻动。
+    turnTarget.value = target
     engine.flip(target - 1, 'top')
   }
 
@@ -239,6 +241,7 @@ export function usePageNavigation(options: NavigationOptions) {
       .every((page) => renderedPages.has(page))
     // 悬停只检查；真正按下时才准备缺失页，并拦截本次原生翻页以免出现黑屏。
     if (!ready && prepare) void goToPage(target)
+    if (ready && prepare) turnTarget.value = target
     return ready
   }
 
@@ -253,6 +256,7 @@ export function usePageNavigation(options: NavigationOptions) {
     renderedPages.clear()
     failedPages.clear()
     flipping = false
+    turnTarget.value = undefined
     currentPage.value = 1
   }
 
@@ -266,6 +270,11 @@ export function usePageNavigation(options: NavigationOptions) {
     currentPage.value = clampPage(page)
   }
 
+  /** 文档就绪后设置初始模式；不作为用户主动切换，因此不发送 mode-change。 */
+  function initializeMode(value: ReaderMode) {
+    mode.value = value
+  }
+
   /**
    * 更新用户选择的单双页模式，并取消旧模式的跳页准备。
    * 调用逻辑：由协调层 setMode 调用，返回值用于判断是否继续调整布局。
@@ -275,6 +284,7 @@ export function usePageNavigation(options: NavigationOptions) {
   function changeMode(value: ReaderMode) {
     if (value === mode.value) return false
     cancelPreparation()
+    turnTarget.value = undefined
     mode.value = value
     options.onModeChange(value)
     return true
@@ -290,6 +300,7 @@ export function usePageNavigation(options: NavigationOptions) {
     const wasFlipping = flipping
     flipping = state === 'flipping' || state === 'user_fold'
     if (state === 'user_fold' || (state === 'read' && wasFlipping)) cancelPreparation()
+    if (state === 'read') turnTarget.value = undefined
   }
 
   /**
@@ -300,6 +311,7 @@ export function usePageNavigation(options: NavigationOptions) {
    */
   function onOrientationChange(value: ReaderMode) {
     cancelPreparation()
+    turnTarget.value = undefined
     orientation.value = value
   }
 
@@ -307,9 +319,9 @@ export function usePageNavigation(options: NavigationOptions) {
 
   return {
     currentPage: readonly(currentPage), mode: readonly(mode), orientation: readonly(orientation),
-    pendingPage: readonly(pendingPage), pageLoading: readonly(pageLoading),
+    pendingPage: readonly(pendingPage), turnTarget: readonly(turnTarget), pageLoading: readonly(pageLoading),
     visiblePages, activePages, renderPages, thumbnailReadyPages, canPrevious, canNext,
-    next, previous, goToPage, changeMode, initializePage, reset, cancelPreparation, canStartUserTurn,
+    next, previous, goToPage, changeMode, initializePage, initializeMode, reset, cancelPreparation, canStartUserTurn,
     onPageRendered, onPageError, syncCurrentPage, onFlipStateChange, onOrientationChange,
   }
 }

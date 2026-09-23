@@ -64,6 +64,35 @@ test('goToPage accepts the first and last page', async (t) => {
   assert.deepEqual(reader.errors, [])
 })
 
+test('document initialization updates mode without reporting a user mode change', (t) => {
+  const reader = createReader()
+  t.after(() => reader.scope.stop())
+  reader.navigation.initializeMode('single')
+  assert.equal(reader.navigation.mode.value, 'single')
+  reader.navigation.reset()
+  reader.navigation.initializeMode('double')
+  assert.equal(reader.navigation.mode.value, 'double')
+})
+
+test('native turn target tracks direction until the flip ends', (t) => {
+  const reader = createReader()
+  t.after(() => reader.scope.stop())
+  const nav = reader.navigation
+  nav.onOrientationChange('double')
+  reader.renderWindow(2)
+  nav.syncCurrentPage(1)
+  assert.equal(nav.canStartUserTurn(true, false), true)
+  assert.equal(nav.turnTarget.value, undefined)
+  assert.equal(nav.canStartUserTurn(true), true)
+  assert.equal(nav.turnTarget.value, 4)
+  nav.onFlipStateChange('user_fold')
+  assert.equal(nav.turnTarget.value, 4)
+  nav.onFlipStateChange('read')
+  assert.equal(nav.turnTarget.value, undefined)
+  assert.equal(nav.canStartUserTurn(false), true)
+  assert.equal(nav.turnTarget.value, 1)
+})
+
 test('invalid jumps do not cancel a valid debounced or preparing jump', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const reader = createReader(150)

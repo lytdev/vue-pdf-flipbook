@@ -94,7 +94,7 @@
 .vpf-thumbnail:focus-visible { outline: 2px solid #987044; outline-offset: -2px; }
 .vpf-thumbnail-preview { width: 100%; aspect-ratio: 3 / 4; background: white; }
 .vpf-book-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
-.vpf-default-thumbnails { position: absolute; z-index: 11; left: 0; right: 0; bottom: 0; max-height: 100%; overflow: auto; pointer-events: auto; background: rgba(237, 240, 235, 0.85); }
+.vpf-default-thumbnails { position: absolute; z-index: 11; left: 0; right: 0; bottom: 0; max-height: 100%; overflow: auto; pointer-events: auto; background: rgba(241, 249, 236, 0.65); }
 .vpf-thumbnails--compact { gap: 6px; padding: 6px; max-height: none; background: transparent; align-items: flex-start; }
 .vpf-thumbnails--compact .vpf-thumbnail { flex: 0 0 30px; width: 30px; min-width: 0; padding: 0; border-width: 1px; font-size: 10px; line-height: 16px; }
 .vpf-thumbnails--compact,
@@ -135,6 +135,17 @@
 .vpf-flipbook.stf__parent { min-width: 0 !important; min-height: 0 !important; }
 .vpf-flipbook { position: relative; width: 100%; height: 100%; }
 .vpf-flipbook { transition: transform var(--vpf-cover-duration) var(--vpf-cover-easing); }
+/* 默认缩略图随封面开合同步展开、收拢，避免先跳到整本书的宽度。 */
+.vpf-default-thumbnails {
+  transition: left var(--vpf-cover-duration) var(--vpf-cover-easing),
+    right var(--vpf-cover-duration) var(--vpf-cover-easing),
+    opacity 220ms ease-in-out max(0ms, calc(var(--vpf-cover-duration) - 220ms));
+}
+.vpf-book-shell--cover-turning .vpf-default-thumbnails {
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
 .vpf-book-shell--front-cover .vpf-page-edges,
 .vpf-book-shell--front-cover .vpf-flipbook { transform: translateX(-25%); }
 .vpf-book-shell--back-cover .vpf-page-edges,
@@ -147,9 +158,11 @@
 .vpf-book-shell--back-cover .vpf-default-thumbnails { left: 25%; right: 25%; }
 .vpf-book-shell--front-cover .stf__wrapper::before,
 .vpf-book-shell--back-cover .stf__wrapper::before,
+.vpf-book-shell--cover-turning .stf__wrapper::before,
 .vpf-flipbook .stf__wrapper.--landscape .vpf-turn-page[data-page='1']::after,
 .vpf-book-shell--back-cover .vpf-turn-page::after { display: none; }
 @media (prefers-reduced-motion: reduce) {
+  .vpf-default-thumbnails { transition: none; }
   .vpf-page-edges { transition: none; }
   .vpf-flipbook { transition: none; }
   .vpf-page-edge { transition: none; }

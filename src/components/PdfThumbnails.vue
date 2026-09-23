@@ -160,11 +160,15 @@ onBeforeUnmount(() => {
 .page-num {
   position: absolute;
   top: 50%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
   left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 9;
-  padding: 2px 4px;
-    background: rgba(181, 181, 181, 0.25);;
+  width: 100%;
+  height: 100%;
+  background: rgba(181, 181, 181, 0.25);;
 }
 </style>
