@@ -81,12 +81,18 @@ function onKeydown(event: KeyboardEvent) {
       </div>
     </form>
     <div class="demo-controls">
+      <button :disabled="!state?.canPrevious" @click="reader?.goToPage(1)">
+        首页
+      </button>
       <button :disabled="!state?.canPrevious" @click="reader?.previous()">
         上一页
       </button>
       <span>{{ state?.page ?? 1 }} / {{ state?.pages ?? 0 }}</span>
       <button :disabled="!state?.canNext" @click="reader?.next()">
         下一页
+      </button>
+      <button :disabled="!state?.canNext" @click="reader?.goToPage(state?.pages as number)">
+        尾页
       </button>
       <input
         aria-label="跳页"
@@ -104,7 +110,7 @@ function onKeydown(event: KeyboardEvent) {
       >
         {{ state?.mode === "single" ? "双页" : "单页" }}
       </button>
-      <button @click="zoom = Math.max(1, zoom - 0.25)">缩小</button>
+      <button @click="zoom = Math.max(0.5, zoom - 0.25)">缩小</button>
       <button @click="zoom = 1">{{ Math.round(zoom * 100) }}%</button>
       <button @click="zoom = Math.min(2.5, zoom + 0.25)">放大</button>
       <button
@@ -125,7 +131,7 @@ function onKeydown(event: KeyboardEvent) {
       <button @click="reader?.reload()">重试</button>
     </p>
     <p v-if="fullscreenError" role="alert">{{ fullscreenError }}</p>
-    <div class="demo-reader-area">
+    <div class="demo-reader-layout">
       <div
         ref="scrollContainer"
         class="demo-scroll"
@@ -136,41 +142,43 @@ function onKeydown(event: KeyboardEvent) {
         @pointercancel="endPan"
         @lostpointercapture="endPan"
       >
-        <div :style="{ width: `${zoom * 100}%`, height: `${zoom * 640}px` }">
-          <div
-            :style="{
-              width: `${100 / zoom}%`,
-              height: '640px',
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top left',
-            }"
-          >
+        <div class="demo-zoom-content" :style="{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }">
             <VuePdfFlipbook
               ref="reader"
               :url="activeUrl"
               height="100%"
-              background="#17201f"
               @state-change="updateState"
               @loaded="pdf = reader?.getDocument()"
               @error="onReaderError"
             >
-              <!-- <template #thumbnail="{ page, pdf, isActive, shouldRender }">
-                <div class="thumbnail-preview">
-                  <PdfCanvasPage
-                    v-if="shouldRender"
-                    :pdf="pdf"
-                    :page-number="page"
-                    :render-scale="0.22"
-                  />
-                  <span v-else>{{ page }}</span>
-                </div>
-
-                <span :class="{ selected: isActive }"> 第 {{ page }} 页 </span>
-              </template> -->
+              <template #thumbnails="{ pdf, items, visible, select, reportError, pageAspectRatio }">
+                <Teleport v-if="pdf && visible" to="#demo-thumbnail-sidebar">
+                  <nav class="custom-thumbnails" aria-label="PDF 缩略图">
+                    <div
+                      v-for="item in items" :key="item.page"
+                      class="custom-thumbnail" role="button" tabindex="0"
+                      :aria-label="`跳转到第 ${item.page} 页`"
+                      :aria-current="item.isActive ? 'page' : undefined"
+                      @click="select(item.page)"
+                      @keydown.enter.self.prevent="select(item.page)"
+                      @keydown.space.self.prevent="select(item.page)"
+                    >
+                        <PdfCanvasPage
+                          v-if="item.shouldRender"
+                          :pdf="pdf" :page-number="item.page"
+                          :render-scale="0.22" @error="reportError"
+                        />
+                        <div v-else class="custom-thumbnail-placeholder" :style="{ aspectRatio: pageAspectRatio }" />
+                        <span class="page-num">{{ item.page }}</span>
+                    </div>
+                  </nav>
+                </Teleport>
+              </template>
             </VuePdfFlipbook>
-          </div>
         </div>
       </div>
+
+    </div>
       <div
         v-if="state?.pageLoading"
         class="demo-page-loading"
@@ -182,18 +190,68 @@ function onKeydown(event: KeyboardEvent) {
           正在加载第 {{ state.targetPage }} 页，请稍候…
         </div>
       </div>
+      <aside
+        id="demo-thumbnail-sidebar"
+        class="demo-thumbnail-sidebar"
+        :class="{ 'is-hidden': !state?.thumbnailsVisible }"
+        aria-label="PDF 缩略图侧边栏"
+      />
     </div>
-  </div>
 </template>
 <style scoped>
-.thumbnail-preview {
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  background: #f5f5f5;
+.custom-thumbnail[aria-current='page'] { border-color: #987044; }
+.custom-thumbnail[aria-current='page'] .page-num {
+  color: #735126;
+  font-weight: 700;
+  background: rgba(152, 112, 68, 0.15);
 }
+.custom-thumbnail:focus-visible { outline: 2px solid #987044; }
 
 .selected {
   color: #987044;
   font-weight: 600;
 }
+
+.demo-thumbnail-sidebar{
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 360px;
+  height: calc(100% - 28px);
+  padding: 14px;
+  overflow: auto;
+  background-color: #fff;
+
+}
+
+.demo-thumbnail-sidebar.is-hidden{
+  display: none;
+}
+.custom-thumbnails{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 14px;
+}
+.custom-thumbnail{
+  position: relative;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.custom-thumbnail-placeholder { background: #f5f5f5; }
+  .page-num{
+      position: absolute;
+      top: 50%;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 9;
+      width: 100%;
+      height: 100%;
+      font-size: 14px;
+      background: rgba(181, 181, 181, 0.25);
+    }
 </style>

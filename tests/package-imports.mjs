@@ -31,6 +31,10 @@ try {
   ], { cwd: root, encoding: 'utf8' })
   const [archive] = JSON.parse(output)
   const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+  const lockfile = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'))
+  assert.equal(lockfile.version, manifest.version, 'Lockfile version must match package version')
+  assert.equal(lockfile.packages[''].version, manifest.version, 'Lockfile root version must match package version')
+  assert.deepEqual(lockfile.packages[''].engines, manifest.engines, 'Lockfile engines must match package engines')
   const installed = path.join(fixture, 'node_modules', manifest.name)
   await mkdir(installed, { recursive: true })
   execFileSync('tar', ['-xzf', path.join(fixture, archive.filename), '-C', installed, '--strip-components=1'])
@@ -45,12 +49,16 @@ try {
   await writeFile(entry, `
 import { ref } from 'vue'
 import plugin, { VuePdfFlipbook, PdfCanvasPage } from '${packed.name}'
-import type { PdfFlipbookExpose, PdfFlipbookState } from '${packed.name}'
+import type { PdfFlipbookExpose, PdfFlipbookProps, PdfFlipbookState, PdfThumbnailSlotProps, PdfThumbnailsSlotProps } from '${packed.name}'
 import '${packed.name}/style.css'
 const reader = ref<PdfFlipbookExpose>()
 const state = ref<PdfFlipbookState>()
+const props: PdfFlipbookProps = { url: 'https://example.com/book.pdf', workerSrc: '/pdf.worker.mjs', initialMode: 'double' }
+const thumbnail = {} as PdfThumbnailSlotProps
+const thumbnails = {} as PdfThumbnailsSlotProps
 state.value = reader.value?.getState()
-export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state }
+reader.value?.goToPage(1)
+export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail, thumbnails }
 `)
   const program = ts.createProgram([entry], {
     noEmit: true,

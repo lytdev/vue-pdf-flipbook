@@ -1,4 +1,5 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { CSSProperties } from 'vue'
 
 export type ReaderMode = 'single' | 'double'
 
@@ -8,6 +9,23 @@ export interface PdfThumbnailSlotProps {
   isActive: boolean
   /** 位于预览窗口且正文已渲染完成；外部插槽据此延迟创建缩略图 Canvas。 */
   shouldRender: boolean
+}
+
+export interface PdfThumbnailItem {
+  page: number
+  isActive: boolean
+  shouldRender: boolean
+}
+
+/** 完整列表插槽：组件只提供数据和操作，DOM、样式与交互由调用方决定。 */
+export interface PdfThumbnailsSlotProps {
+  pdf: PDFDocumentProxy | undefined
+  items: readonly PdfThumbnailItem[]
+  visible: boolean
+  pageAspectRatio: number
+  select: (page: number) => Promise<void>
+  hide: () => void
+  reportError: (error: unknown) => void
 }
 
 export interface PdfFlipbookProps {
@@ -21,6 +39,14 @@ export interface PdfFlipbookProps {
   height?: string | number
   background?: string
   workerSrc?: string
+  /** @deprecated 新的完整自定义请使用 thumbnails 插槽与 Vue Teleport。 */
+  thumbnailTarget?: string | HTMLElement
+  /** @deprecated 新的完整自定义请在 thumbnails 插槽内使用 CSS 布局。 */
+  thumbnailLayout?: 'horizontal' | 'grid'
+  /** @deprecated 新的完整自定义请在 thumbnails 插槽内使用 CSS grid。 */
+  thumbnailColumns?: number
+  /** @deprecated 新的完整自定义请在 thumbnails 插槽内直接设置元素样式。 */
+  thumbnailItemStyle?: CSSProperties | ((page: number) => CSSProperties)
 }
 
 export interface PdfFlipbookState {

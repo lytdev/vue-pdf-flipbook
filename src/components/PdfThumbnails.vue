@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import type { CSSProperties } from 'vue'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { PdfThumbnailSlotProps } from '../types'
-import { getPageWindow } from '../pageWindow'
+import { getThumbnailPreviewPages } from '../thumbnailItems'
 import PdfCanvasPage from './PdfCanvasPage.vue'
 
 const props = defineProps<{
@@ -12,9 +13,12 @@ const props = defineProps<{
   readyPages: ReadonlySet<number>
   compact?: boolean
   pageAspectRatio?: number
+  layout?: 'horizontal' | 'grid'
+  columns?: number
+  itemStyle?: CSSProperties | ((page: number) => CSSProperties)
 }>()
 const emit = defineEmits<{ select: [page: number]; error: [error: unknown] }>()
-defineSlots<{ thumbnail?: (props: PdfThumbnailSlotProps) => unknown }>()
+const slots = defineSlots<{ thumbnail?: (props: PdfThumbnailSlotProps) => unknown }>()
 const container = ref<HTMLElement>()
 const dragging = ref(false)
 let startX = 0
@@ -84,11 +88,27 @@ function guardDragClick(event: MouseEvent) {
   event.preventDefault()
   event.stopPropagation()
 }
+
+function onThumbnailKeydown(event: KeyboardEvent, page: number) {
+  if (!slots.thumbnail || event.target !== event.currentTarget) return
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  emit('select', page)
+}
 // 缩略图只渲染预览窗口内已完成正文绘制的页，避免与主阅读区域争抢资源。
-const previewPages = computed(() => new Set(getPageWindow(
-  props.visiblePages[0] ?? 1, props.pages,
-  props.visiblePages.length > 1 ? 'double' : 'single',
-).filter((page) => props.readyPages.has(page))))
+const previewPages = computed(() => getThumbnailPreviewPages(
+  props.visiblePages, props.pages, props.readyPages,
+))
+const gridColumns = computed(() => {
+  if (props.layout === 'horizontal') return undefined
+  const columns = Number.isInteger(props.columns) && (props.columns ?? 0) > 0
+    ? props.columns : undefined
+  return props.layout === 'grid' ? columns ?? 2 : columns
+})
+
+function getItemStyle(page: number): CSSProperties | undefined {
+  return typeof props.itemStyle === 'function' ? props.itemStyle(page) : props.itemStyle
+}
 
 /**
  * 将当前页按钮居中到缩略图横向可视区域。
@@ -103,9 +123,19 @@ function centerCurrentPage() {
   const rect = element.getBoundingClientRect()
   const currentRect = current.getBoundingClientRect()
   // 当前按钮左偏移减去居中所需留白，计算列表自身需要移动的距离。
-  element.scrollLeft += currentRect.left - rect.left - element.clientLeft
-    - (element.clientWidth - currentRect.width) / 2
+  if (gridColumns.value) {
+    element.scrollTop += currentRect.top - rect.top - element.clientTop
+      - (element.clientHeight - currentRect.height) / 2
+  } else {
+    element.scrollLeft += currentRect.left - rect.left - element.clientLeft
+      - (element.clientWidth - currentRect.width) / 2
+  }
 }
+
+watch(() => props.visiblePages, async () => {
+  await nextTick()
+  centerCurrentPage()
+})
 
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
@@ -124,7 +154,12 @@ onBeforeUnmount(() => {
 <template>
   <nav
     ref="container" class="vpf-thumbnails"
-    :class="{ 'vpf-thumbnails--compact': compact, 'vpf-thumbnails--dragging': dragging }"
+    :class="{
+      'vpf-thumbnails--compact': compact,
+      'vpf-thumbnails--grid': !!gridColumns,
+      'vpf-thumbnails--dragging': dragging,
+    }"
+    :style="gridColumns ? { '--vpf-thumbnail-columns': gridColumns } : undefined"
     aria-label="PDF 缩略图"
     @mousedown="startDrag"
     @mousemove="guardThumbnailMove"
@@ -135,11 +170,20 @@ onBeforeUnmount(() => {
     @click.capture="guardDragClick"
     @click="stopThumbnailInteraction"
   >
-    <button
-      v-for="page in pages" :key="page" type="button" class="vpf-thumbnail"
+    <component
+      :is="slots.thumbnail ? 'div' : 'button'"
+      v-for="page in pages" :key="page"
+      :type="slots.thumbnail ? undefined : 'button'"
+      class="vpf-thumbnail"
+      :class="{ 'vpf-thumbnail--custom': !!slots.thumbnail }"
+      :style="getItemStyle(page)"
+      :data-page="page"
+      :role="slots.thumbnail ? 'button' : undefined"
+      :tabindex="slots.thumbnail ? 0 : undefined"
       :aria-label="`跳转到第 ${page} 页`"
       :aria-current="visiblePages.includes(page) ? 'page' : undefined"
       @click="emit('select', page)"
+      @keydown="onThumbnailKeydown($event, page)"
     >
       <slot name="thumbnail" :page="page" :pdf="pdf" :is-active="visiblePages.includes(page)" :should-render="previewPages.has(page)">
         <div class="thumbnail-container">
@@ -149,7 +193,7 @@ onBeforeUnmount(() => {
           <span class="page-num">{{ page }}</span>
         </div>
       </slot>
-    </button>
+    </component>
   </nav>
 </template>
 <style scoped>
@@ -169,6 +213,6 @@ onBeforeUnmount(() => {
   z-index: 9;
   width: 100%;
   height: 100%;
-  background: rgba(181, 181, 181, 0.25);;
+  background: rgba(181, 181, 181, 0.25);
 }
 </style>

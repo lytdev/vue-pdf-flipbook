@@ -23,6 +23,9 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   const bookRevision = ref(0)
   const thumbnailsVisible = ref(false)
   const turnState = ref('read')
+  const initialViewReady = ref(false)
+  const engineInitialized = ref(false)
+  const initialRenderError = ref('')
 
   // 回调在 setup 完成后执行，届时文档、导航、引擎和布局模块均已创建。
   const document = usePdfDocument(props, {
@@ -33,6 +36,9 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
      * @returns void。
      */
     onReset() {
+      initialViewReady.value = false
+      engineInitialized.value = false
+      initialRenderError.value = ''
       navigation.reset()
       engine.destroy()
       turnState.value = 'read'
@@ -66,6 +72,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
       await nextTick()
       if (!isCurrent()) return
       engine.initialize(document.pageSize.value, document.pageCount.value, navigation.currentPage.value)
+      engineInitialized.value = true
       emit('loaded', { pages: pdf.numPages })
       emit('page-change', navigation.currentPage.value)
     },
@@ -99,6 +106,24 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     viewport, bookStage, pageSize: document.pageSize, mode: navigation.mode,
     onUpdate: engine.update,
   })
+
+  // 文件解析完成时页面仍可能是白色；等当前可见 Canvas 全部绘制后才移除遮罩。
+  watch([engineInitialized, navigation.visiblePages, navigation.thumbnailReadyPages], () => {
+    if (initialViewReady.value || !engineInitialized.value) return
+    const pages = navigation.visiblePages.value
+    if (pages.length && pages.every((page) => navigation.thumbnailReadyPages.value.has(page))) {
+      initialViewReady.value = true
+    }
+  }, { flush: 'sync' })
+
+  const initialLoadError = computed(() => document.errorMessage.value || initialRenderError.value)
+
+  function onPageError(page: number, error: unknown) {
+    if (!initialViewReady.value && navigation.visiblePages.value.includes(page)) {
+      initialRenderError.value = error instanceof Error ? error.message : '页面渲染失败'
+    }
+    navigation.onPageError(page, error)
+  }
 
   const rootHeight = computed(() =>
     typeof props.height === 'number' ? `${props.height}px` : props.height,
@@ -196,8 +221,9 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     bookShellStyle: layout.bookShellStyle, coverClass, showPageNavigation, pageEdgesStyle,
     hideDefaultThumbnails,
     pdf: document.pdf, loading: document.loading, pageCount: document.pageCount,
+    initialViewReady, initialLoadError,
     pageLoading: navigation.pageLoading, mode: navigation.mode, activePages: navigation.activePages,
     renderPages: navigation.renderPages, thumbnailReadyPages: navigation.thumbnailReadyPages,
-    onPageRendered: navigation.onPageRendered, onPageError: navigation.onPageError,
+    onPageRendered: navigation.onPageRendered, onPageError,
   }
 }

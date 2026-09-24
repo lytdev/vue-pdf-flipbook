@@ -14,7 +14,7 @@ There is no test directory. Add tests beside units as `*.spec.ts` or under `test
 
 ## Build, Test, and Development Commands
 
-- `npm install` installs dependencies. Node.js 20 or newer is required.
+- `npm install` installs dependencies. Node.js 22.15 or newer is required.
 - `npm run dev` starts the Vite demo for interactive PDF and animation checks.
 - `npm run typecheck` runs strict Vue/TypeScript validation.
 - `npm run build` builds the ES module, CSS, and declarations in `dist/`.

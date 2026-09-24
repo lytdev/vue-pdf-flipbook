@@ -50,10 +50,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/lytdev/vue-pdf-flipbook.git"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.15.0"
   },
   "peerDependencies": {
     "vue": "^3.4.0"
