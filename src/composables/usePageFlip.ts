@@ -5,9 +5,16 @@ import type { ReaderMode } from '../types'
 import type { PageSize } from './types'
 
 interface EngineEvents {
+  /** @param pageIndex PageFlip 回传的零基当前页索引。 */
   onFlip: (pageIndex: number) => void
+  /** @param state 引擎状态，如 read、flipping 或 user_fold。 */
   onStateChange: (state: string) => void
+  /** @param mode 引擎实际显示方向转换成的 single / double 模式。 */
   onOrientationChange: (mode: ReaderMode) => void
+  /**
+   * @param forward 是否向后翻。
+   * @param prepare 是否允许开始准备缺失页。
+   */
   canStartUserTurn: (forward: boolean, prepare?: boolean) => boolean
   getLayoutMode: () => ReaderMode
 }
@@ -165,7 +172,12 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     /** 导航层翻页前调用；无参数，返回引擎实例是否存在。 */
     isReady: () => pageFlip !== undefined,
     update,
-    /** 导航准备完成后调用；pageIndex 为零基目标索引，corner 为起翻页角；返回 void。 */
+    /**
+     * 导航准备完成后启动翻页，并按首尾页状态调整动画时长。
+     * @param pageIndex 目标页面在 PageFlip 中的零基索引。
+     * @param corner 起翻页角，top 为上角，bottom 为下角。
+     * @returns void；动画完成状态由引擎事件另行通知导航层。
+     */
     flip: (pageIndex: number, corner: 'top' | 'bottom') => {
       if (!pageFlip) return
       const current = pageFlip.getCurrentPageIndex()

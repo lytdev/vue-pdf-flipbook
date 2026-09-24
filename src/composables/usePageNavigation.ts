@@ -270,7 +270,11 @@ export function usePageNavigation(options: NavigationOptions) {
     currentPage.value = clampPage(page)
   }
 
-  /** 文档就绪后设置初始模式；不作为用户主动切换，因此不发送 mode-change。 */
+  /**
+   * 文档就绪后设置初始模式；不作为用户主动切换，因此不发送 mode-change。
+   * @param value 根据首页比例或 initialMode 确定的 single / double 模式。
+   * @returns void。
+   */
   function initializeMode(value: ReaderMode) {
     mode.value = value
   }

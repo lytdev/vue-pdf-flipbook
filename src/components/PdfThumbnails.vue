@@ -27,6 +27,10 @@ let suppressClick = false
 let dragSession = false
 let nativeScrollbarDrag = false
 
+/**
+ * 结束默认缩略图的鼠标拖动并移除窗口级监听。
+ * @param event 可选的 mouseup 或 blur 事件；有拖动会话时阻止其继续传给翻页引擎。
+ */
 function stopDrag(event?: Event) {
   if (dragSession && event) event.stopImmediatePropagation()
   dragSession = false
@@ -37,6 +41,10 @@ function stopDrag(event?: Event) {
   window.removeEventListener('blur', stopDrag)
 }
 
+/**
+ * 根据鼠标位移滚动横向缩略图，并隔离 PageFlip 的全局鼠标事件。
+ * @param event 当前 mousemove 事件；只处理已开始的左键拖动。
+ */
 function moveDrag(event: MouseEvent) {
   if (!dragSession) return
   // 捕获阶段先于 PageFlip 的 window mousemove 处理，缩略图拖动期间完全隔离翻页引擎。
@@ -55,6 +63,10 @@ function moveDrag(event: MouseEvent) {
   element.scrollLeft = startScrollLeft - distance
 }
 
+/**
+ * 记录默认缩略图的拖动起点；滚动条上的按下仍交给浏览器原生滚动。
+ * @param event 缩略图列表上的 mousedown 事件，仅鼠标左键会启动会话。
+ */
 function startDrag(event: MouseEvent) {
   if (!props.compact || event.button !== 0) return
   stopDrag()
@@ -73,14 +85,26 @@ function startDrag(event: MouseEvent) {
   window.addEventListener('blur', stopDrag)
 }
 
+/**
+ * 阻止默认缩略图上的鼠标移动触发书页角落预翻效果。
+ * @param event 列表内的 mousemove 事件；仅 compact 模式拦截。
+ */
 function guardThumbnailMove(event: MouseEvent) {
   if (props.compact) event.stopPropagation()
 }
 
+/**
+ * 防止缩略图触摸和点击事件继续触发书页翻动。
+ * @param event 列表内的触摸或点击事件；仅 compact 模式拦截。
+ */
 function stopThumbnailInteraction(event: Event) {
   if (props.compact) event.stopPropagation()
 }
 
+/**
+ * 拖动结束后抑制随之产生的鼠标 click，保留键盘生成的 click。
+ * @param event 列表捕获阶段的 click 事件；detail 为 0 时视为键盘触发。
+ */
 function guardDragClick(event: MouseEvent) {
   // 键盘触发的 click（detail 为 0）仍可跳页；真正拖动后的鼠标 click 被拦截。
   if (!suppressClick || event.detail === 0) return
@@ -89,6 +113,11 @@ function guardDragClick(event: MouseEvent) {
   event.stopPropagation()
 }
 
+/**
+ * 让旧版自定义单项插槽的外层 div 支持回车和空格选页。
+ * @param event 缩略图单项上的 keydown 事件。
+ * @param page 对应的一基页码，传给 select 事件。
+ */
 function onThumbnailKeydown(event: KeyboardEvent, page: number) {
   if (!slots.thumbnail || event.target !== event.currentTarget) return
   if (event.key !== 'Enter' && event.key !== ' ') return
@@ -106,6 +135,11 @@ const gridColumns = computed(() => {
   return props.layout === 'grid' ? columns ?? 2 : columns
 })
 
+/**
+ * 取得旧版单项的样式，支持固定对象或按页码生成的函数。
+ * @param page 当前缩略图的一基页码。
+ * @returns 此页的 CSSProperties；未配置时为 undefined。
+ */
 function getItemStyle(page: number): CSSProperties | undefined {
   return typeof props.itemStyle === 'function' ? props.itemStyle(page) : props.itemStyle
 }

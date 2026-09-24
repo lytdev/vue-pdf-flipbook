@@ -19,33 +19,53 @@ export interface PdfThumbnailItem {
 
 /** 完整列表插槽：组件只提供数据和操作，DOM、样式与交互由调用方决定。 */
 export interface PdfThumbnailsSlotProps {
+  /** 当前 PDF 文档；首次加载或重新加载期间为 undefined，外部不要主动 destroy。 */
   pdf: PDFDocumentProxy | undefined
+  /** 所有页的轻量数据；仅 shouldRender 为 true 时创建对应的预览 Canvas。 */
   items: readonly PdfThumbnailItem[]
+  /** 外部按此值决定是否展示自定义缩略图列表。 */
   visible: boolean
+  /** PDF 首页宽高比，可供外部预留缩略图占位尺寸。 */
   pageAspectRatio: number
+  /**
+   * 选择页码时调用，复用阅读器的校验、预加载与翻页流程。
+   * @param page 目标页的一基整数页码，范围为 1 到文档总页数。
+   * @returns 翻页启动、取消或忽略时完成的 Promise，不等待动画结束。
+   */
   select: (page: number) => Promise<void>
+  /** 隐藏缩略图并更新阅读器状态。 */
   hide: () => void
+  /**
+   * 将自定义缩略图的渲染异常转发为阅读器 error 事件。
+   * @param error 外部缩略图组件产生的异常。
+   * @returns void。
+   */
   reportError: (error: unknown) => void
 }
 
+/** VuePdfFlipbook 的公开属性；缩放、全屏和工具栏由外部容器实现。 */
 export interface PdfFlipbookProps {
+  /** PDF 地址；变化时取消旧请求并重新加载。服务器需允许浏览器 CORS 与 Range / 206 请求。 */
   url: string
-  /** PDF 原始字节数；CORS 未暴露 Content-Range 时用于确定分段边界。 */
+  /** PDF 原始字节数，须为正的安全整数；CORS 未暴露 Content-Range 时必须提供。 */
   fileSize?: number
+  /** 每次加载文档时的起始页码，从 1 开始；越界值会限制在有效页码范围内。 */
   initialPage?: number
-  /** 未指定时根据 PDF 首页宽高选择：横向单栏，纵向双栏。 */
+  /** 加载时的阅读模式；未指定则按首页比例选择横向单栏、纵向双栏。后续切换使用 setMode。 */
   initialMode?: ReaderMode
-  /** 默认填满已设置高度的父容器；数值按像素处理。 */
+  /** 阅读区域高度；默认填满父容器，父容器须有确定高度；数值按像素处理。 */
   height?: string | number
+  /** 阅读区域背景色，默认透明；不改变 PDF 页面本身的颜色。 */
   background?: string
+  /** 外部 PDF.js Worker 地址；留空用内置 Worker，外部文件须与本包 PDF.js 版本完全一致。 */
   workerSrc?: string
-  /** @deprecated 新的完整自定义请使用 thumbnails 插槽与 Vue Teleport。 */
+  /** @deprecated 旧版缩略图挂载目标，选择器须能找到已存在的容器；新代码请使用 thumbnails 插槽与 Vue Teleport。 */
   thumbnailTarget?: string | HTMLElement
-  /** @deprecated 新的完整自定义请在 thumbnails 插槽内使用 CSS 布局。 */
+  /** @deprecated 旧版列表布局；新代码请在 thumbnails 插槽内自行使用 CSS 布局。 */
   thumbnailLayout?: 'horizontal' | 'grid'
-  /** @deprecated 新的完整自定义请在 thumbnails 插槽内使用 CSS grid。 */
+  /** @deprecated 旧版网格列数，仅 grid 布局生效；新代码请在 thumbnails 插槽内使用 CSS grid。 */
   thumbnailColumns?: number
-  /** @deprecated 新的完整自定义请在 thumbnails 插槽内直接设置元素样式。 */
+  /** @deprecated 旧版单项样式；新代码请在 thumbnails 插槽内直接设置元素样式。 */
   thumbnailItemStyle?: CSSProperties | ((page: number) => CSSProperties)
 }
 

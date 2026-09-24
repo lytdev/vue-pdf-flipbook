@@ -9,8 +9,14 @@ import type { PageSize, ResolvedFlipbookProps } from './types'
 interface DocumentEvents {
   onReset: () => void
   onRangeError: () => void
+  /**
+   * @param document 新加载的 PDF 文档。
+   * @param isCurrent 检查异步结果是否仍属本轮加载的函数。
+   */
   onReady: (document: PDFDocumentProxy, isCurrent: () => boolean) => Promise<void>
+  /** @param progress 本轮 PDF 下载进度，范围为 0 到 100。 */
   onProgress: (progress: number) => void
+  /** @param error 文档加载或分段传输失败产生的异常。 */
   onError: (error: unknown) => void
 }
 

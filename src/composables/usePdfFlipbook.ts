@@ -118,6 +118,13 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
 
   const initialLoadError = computed(() => document.errorMessage.value || initialRenderError.value)
 
+  /**
+   * 记录首屏渲染失败并交给导航层取消相关跳页请求。
+   * 调用逻辑：正文 PdfCanvasPage 的 error 事件经组件模板调用。
+   * @param page 出错 Canvas 对应的一基页码。
+   * @param error PDF.js 渲染异常，原样转发给外部 error 事件。
+   * @returns void。
+   */
   function onPageError(page: number, error: unknown) {
     if (!initialViewReady.value && navigation.visiblePages.value.includes(page)) {
       initialRenderError.value = error instanceof Error ? error.message : '页面渲染失败'

@@ -9,7 +9,9 @@ interface CanvasOptions {
 }
 
 interface CanvasEvents {
+  /** @param payload 已绘制页面的一基页码及 Canvas 对应的视口宽高。 */
   onRendered: (payload: { page: number; width: number; height: number }) => void
+  /** @param error PDF.js 获取页面或绘制 Canvas 时产生的异常。 */
   onError: (error: unknown) => void
 }
 

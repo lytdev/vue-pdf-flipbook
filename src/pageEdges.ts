@@ -3,10 +3,19 @@ import { getVisiblePages } from './pageWindow'
 
 export const pageEdgeSpace = 18
 
-/** 准备页面时保留原页叠，真正开始翻动后与目标页同步；零厚度不保留退场动画。 */
+/**
+ * 计算书页左右纸叠的 CSS 变量；准备时保留原页叠，翻动后切换到目标页叠。
+ * @param page 当前一基页码。
+ * @param pages 文档总页数。
+ * @param mode 实际单双页布局；单页布局不显示纸叠。
+ * @param target 待翻到的一基页码；没有目标时为 undefined。
+ * @param state PageFlip 动画状态，用于决定渐隐和渐显时机。
+ * @returns 纸叠宽度、可见性和透明度的 CSS 自定义属性对象。
+ */
 export function getPageEdgesStyle(page: number, pages: number, mode: ReaderMode, target: number | undefined, state: string) {
   const edges = getPageEdges(state === 'flipping' && target !== undefined ? target : page, pages, mode)
   const turning = state === 'flipping' || state === 'user_fold'
+  /** @param value 待检查页组的一基页码；返回是否包含首页或末页。 */
   const touchesEnd = (value: number) => {
     const visible = getVisiblePages(value, pages, mode)
     return visible.includes(1) || visible.includes(pages)
@@ -23,7 +32,13 @@ export function getPageEdgesStyle(page: number, pages: number, mode: ReaderMode,
   }
 }
 
-/** 按当前页组前后的页数分配纸叠厚度；少页文档不会显示厚书效果。 */
+/**
+ * 按当前页组前后的剩余页数分配纸叠厚度；短文档自动减薄。
+ * @param page 当前一基页码。
+ * @param pages 文档总页数。
+ * @param mode 实际单双页布局。
+ * @returns 左右两侧纸叠宽度，单位 CSS 像素。
+ */
 export function getPageEdges(page: number, pages: number, mode: ReaderMode) {
   if (mode !== 'double' || pages <= 1) return { left: 0, right: 0 }
   const visible = getVisiblePages(page, pages, mode)

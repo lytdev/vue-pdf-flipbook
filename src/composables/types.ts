@@ -18,6 +18,12 @@ export type FlipbookEvents = {
   progress: [progress: number]
 }
 
+/**
+ * 组件内部统一的类型化事件发送函数。
+ * @param event FlipbookEvents 中定义的事件名。
+ * @param args 与该事件名对应的参数元组。
+ * @returns void。
+ */
 export type FlipbookEmit = <K extends keyof FlipbookEvents>(event: K, ...args: FlipbookEvents[K]) => void
 
 export interface FlipEnginePort {
