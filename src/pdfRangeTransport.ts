@@ -1,4 +1,3 @@
-import { PDFDataRangeTransport } from 'pdfjs-dist'
 import { openRangeSource } from './rangeSource'
 
 /**
@@ -17,6 +16,8 @@ export async function createPdfRangeTransport(
   fileSize?: number,
 ) {
   const source = await openRangeSource(url, controller.signal, fileSize)
+  // 浏览器挂载后才执行 PDF.js，SSR 导入组件不会访问 DOMMatrix。
+  const { PDFDataRangeTransport } = await import('pdfjs-dist')
   class RangeTransport extends PDFDataRangeTransport {
     /**
      * 按 PDF.js 请求读取字节段，完成后通知 onDataRange。

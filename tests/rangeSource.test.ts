@@ -71,7 +71,7 @@ test('rejects the wrong range instead of feeding corrupt bytes to PDF.js', async
 test('abort signal reaches the probe and later requests', async (t) => {
   const controller = new AbortController()
   t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
-    assert.equal(init.signal, controller.signal)
+    assert.ok(init.signal instanceof AbortSignal)
     init.signal?.throwIfAborted()
     return new Response(new Uint8Array(rangeChunkSize), {
       status: 206, headers: { 'Content-Range': `bytes 0-65535/${length}` },
@@ -80,4 +80,39 @@ test('abort signal reaches the probe and later requests', async (t) => {
   const source = await openRangeSource(url, controller.signal)
   controller.abort()
   await assert.rejects(source.read(rangeChunkSize, rangeChunkSize * 2), { name: 'AbortError' })
+})
+
+test('range header timeout cancels the fetch signal', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let child: AbortSignal | undefined
+  t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    child = init.signal as AbortSignal
+    return new Promise<Response>(() => undefined)
+  })
+  const request = openRangeSource(url, new AbortController().signal)
+  const rejection = assert.rejects(request, /超时/)
+  await Promise.resolve()
+  t.mock.timers.tick(30_000)
+  await rejection
+  assert.equal(child?.aborted, true)
+})
+
+test('range body timeout also aborts a stalled stream', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let started!: () => void
+  const reading = new Promise<void>((resolve) => { started = resolve })
+  let child: AbortSignal | undefined
+  t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    child = init.signal as AbortSignal
+    return new Response(new ReadableStream({
+      start(controller) { child!.addEventListener('abort', () => controller.error(child!.reason), { once: true }) },
+      pull() { started() },
+    }, { highWaterMark: 0 }), { status: 206, headers: { 'Content-Range': 'bytes 0-19/20' } })
+  })
+  const request = openRangeSource(url, new AbortController().signal)
+  const rejection = assert.rejects(request, /超时/)
+  await reading
+  t.mock.timers.tick(30_000)
+  await rejection
+  assert.equal(child?.aborted, true)
 })

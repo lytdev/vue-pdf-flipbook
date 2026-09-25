@@ -3,12 +3,15 @@ import type { Ref } from 'vue'
 import { getPageWindow, getTurnPages, getVisiblePages } from '../pageWindow'
 import type { ReaderMode } from '../types'
 import type { FlipEnginePort } from './types'
+import { operationTimeoutMs } from '../runtimeLimits'
 
 interface NavigationOptions {
   pageCount: Readonly<Ref<number>>
   loading: Readonly<Ref<boolean>>
   initialMode: ReaderMode
   debounceMs?: number
+  /** 内部测试可缩短准备超时，不属于组件公开属性。 */
+  preparationTimeoutMs?: number
   engine: FlipEnginePort
   onError: (error: unknown) => void
   onPageChange: (page: number) => void
@@ -37,6 +40,7 @@ export function usePageNavigation(options: NavigationOptions) {
   let flipping = false
   let debounceTimer: ReturnType<typeof setTimeout> | undefined
   let finishDebounce: ((ready: boolean) => void) | undefined
+  let preparationTimer: ReturnType<typeof setTimeout> | undefined
 
   const visiblePages = computed(() => getVisiblePages(currentPage.value, pageCount.value, orientation.value))
   const canPrevious = computed(() => !loading.value && !!pageCount.value && currentPage.value > 1)
@@ -86,6 +90,8 @@ export function usePageNavigation(options: NavigationOptions) {
   function cancelPreparation(clearTarget = true) {
     // 版本号让所有旧异步请求失效，同时结束其等待，避免 Promise 悬挂。
     navigationRevision += 1
+    clearTimeout(preparationTimer)
+    preparationTimer = undefined
     if (debounceTimer !== undefined) clearTimeout(debounceTimer)
     debounceTimer = undefined
     finishDebounce?.(false)
@@ -190,18 +196,31 @@ export function usePageNavigation(options: NavigationOptions) {
     // 每次正文渲染完成都会重新检查，动画所需页面全部就绪后才放行。
     const ready = await new Promise<boolean>((resolve) => {
       finishPreparation = resolve
+      preparationTimer = setTimeout(() => {
+        cancelPreparation()
+        options.onError(new Error('PDF 页面准备超时，请重试或重新加载文档'))
+      }, options.preparationTimeoutMs ?? operationTimeoutMs)
       checkPreparation = () => {
         if (required.every((number) => renderedPages.has(number))) resolve(true)
       }
       checkPreparation()
     })
+    if (revision !== navigationRevision) return
+    clearTimeout(preparationTimer)
+    preparationTimer = undefined
     if (!ready || revision !== navigationRevision || !engine.isReady()) return
     pageLoading.value = false
     finishPreparation = undefined
     checkPreparation = undefined
     // 引擎根据目标页决定前后方向；corner 只选择起翻页角，前后统一从上角翻动。
     turnTarget.value = target
-    engine.flip(target - 1, 'top')
+    try {
+      engine.flip(target - 1, 'top')
+    } catch (error) {
+      turnTarget.value = undefined
+      cancelPreparation()
+      options.onError(error)
+    }
   }
 
   /**

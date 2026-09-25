@@ -56,9 +56,14 @@ const thumbnailHost = shallowRef<HTMLElement>()
  */
 function resolveThumbnailHost() {
   if (slots.thumbnails) return
-  thumbnailHost.value = typeof legacyThumbnailProps.thumbnailTarget === 'string'
-    ? document.querySelector<HTMLElement>(legacyThumbnailProps.thumbnailTarget) ?? undefined
-    : legacyThumbnailProps.thumbnailTarget
+  try {
+    thumbnailHost.value = typeof legacyThumbnailProps.thumbnailTarget === 'string'
+      ? document.querySelector<HTMLElement>(legacyThumbnailProps.thumbnailTarget) ?? undefined
+      : legacyThumbnailProps.thumbnailTarget
+  } catch (error) {
+    thumbnailHost.value = undefined
+    emit('error', error)
+  }
 }
 
 onMounted(resolveThumbnailHost)

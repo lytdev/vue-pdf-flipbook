@@ -1,9 +1,9 @@
 import { onScopeDispose, readonly, ref, shallowReadonly, shallowRef } from 'vue'
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import type { OnProgressParameters, PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url&inline'
 import { createPdfRangeTransport } from '../pdfRangeTransport'
 import { rangeChunkSize } from '../rangeSource'
+import { maxDocumentPages } from '../runtimeLimits'
+import { withTimeout } from '../withTimeout'
 import type { PageSize, ResolvedFlipbookProps } from './types'
 
 interface DocumentEvents {
@@ -27,7 +27,10 @@ interface DocumentEvents {
  * @param events 文档重置、就绪、进度与错误回调。
  * @returns 只读文档状态及 load 方法。
  */
-export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEvents) {
+export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEvents, dependencies = {
+  runtime: () => import('../pdfRuntime'),
+  range: createPdfRangeTransport,
+}) {
   // PDF.js 实例保留原始对象，只跟踪引用变化，避免被 Vue 深度代理。
   const pdf = shallowRef<PDFDocumentProxy>()
   const pageCount = ref(0)
@@ -38,6 +41,15 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
   let loadingTask: PDFDocumentLoadingTask | undefined
   let rangeController: AbortController | undefined
   let loadRevision = 0
+
+  /** 分离旧任务引用并接住同步/异步销毁异常；卸载时也不会遗留拒绝。 */
+  function releaseTask() {
+    const task = loadingTask
+    loadingTask = undefined
+    if (task) void Promise.resolve().then(() => task.destroy()).catch((error: unknown) => {
+      console.error('[vue-pdf-flipbook] PDF 资源释放失败', error)
+    })
+  }
 
   /**
    * 中止旧会话，建立分段传输并加载新 PDF。
@@ -56,35 +68,32 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
     const isCurrent = () => revision === loadRevision
 
     // 先清空旧导航和引擎，再公布本轮加载状态。
-    events.onReset()
-    void loadingTask?.destroy()
+    releaseTask()
     pdf.value = undefined
     pageCount.value = 0
     errorMessage.value = ''
     loading.value = true
     loadProgress.value = 0
 
-    if (!props.url) {
-      errorMessage.value = '请提供有效的 PDF URL'
-      loading.value = false
-      events.onError(new Error(errorMessage.value))
-      return
-    }
-
-    GlobalWorkerOptions.workerSrc = props.workerSrc || pdfWorker
     try {
-      const range = await createPdfRangeTransport(props.url, controller, (error) => {
+      events.onReset()
+      if (!props.url) throw new Error('请提供有效的 PDF URL')
+      const range = await dependencies.range(props.url, controller, (error) => {
         if (!isCurrent()) return
         rangeFailed = true
         loading.value = false
         errorMessage.value = error instanceof Error ? error.message : 'PDF 分段加载失败'
-        events.onRangeError()
         pdf.value = undefined
         pageCount.value = 0
-        void loadingTask?.destroy().catch(() => undefined)
+        releaseTask()
+        events.onRangeError()
         events.onError(error)
       }, props.fileSize)
       if (!isCurrent()) return
+      const { GlobalWorkerOptions, getDocument, workerSrc } = await dependencies.runtime()
+      if (!isCurrent() || controller.signal.aborted) return
+      // 配置与创建之间不再 await，防止其他实例覆盖本轮 Worker 地址。
+      GlobalWorkerOptions.workerSrc = props.workerSrc || workerSrc
       // 禁止流式下载与自动补全全文，由 PDF.js 按解析和渲染需要请求字节段。
       loadingTask = getDocument({
         range,
@@ -94,15 +103,20 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
         rangeChunkSize,
       })
       loadingTask.onProgress = ({ loaded, total }: OnProgressParameters) => {
-        if (!isCurrent()) return
+        if (!isCurrent() || controller.signal.aborted) return
         if (total > 0) loadProgress.value = Math.min(100, Math.round((loaded / total) * 100))
         events.onProgress(loadProgress.value)
       }
-      const documentProxy = await loadingTask.promise
+      const task = loadingTask
+      const documentProxy = await withTimeout(controller.signal, () => task.promise)
       if (!isCurrent()) return
+      // 引擎要求全量页面节点：在创建 DOM 前限制容量，避免极长文件阻塞主线程。
+      if (documentProxy.numPages > maxDocumentPages) {
+        throw new RangeError(`PDF 页数超过安全上限（${maxDocumentPages} 页），请拆分文档后阅读`)
+      }
       // 首页原始比例作为布局基准；这里获取页面信息，Canvas 由页面组件绘制。
-      const firstPage = await documentProxy.getPage(1)
-      if (!isCurrent()) return
+      const firstPage = await withTimeout(controller.signal, () => documentProxy.getPage(1))
+      if (!isCurrent() || controller.signal.aborted) return
       const firstViewport = firstPage.getViewport({ scale: 1 })
       pageSize.value = {
         width: Math.round(firstViewport.width),
@@ -111,11 +125,17 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
       pdf.value = documentProxy
       pageCount.value = documentProxy.numPages
       loading.value = false
-      await events.onReady(documentProxy, isCurrent)
+      await events.onReady(documentProxy, () => isCurrent() && !controller.signal.aborted)
     } catch (error) {
       // 旧会话不回写状态；分段错误已单独报告，避免重复发送错误事件。
       if (!isCurrent() || rangeFailed) return
       controller.abort()
+      releaseTask()
+      pdf.value = undefined
+      pageCount.value = 0
+      try { events.onReset() } catch (cleanupError) {
+        console.error('[vue-pdf-flipbook] 阅读器复位失败', cleanupError)
+      }
       loading.value = false
       errorMessage.value = error instanceof Error
         ? error.message
@@ -127,7 +147,7 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
   onScopeDispose(() => {
     loadRevision += 1
     rangeController?.abort()
-    void loadingTask?.destroy()
+    releaseTask()
   })
 
   return {

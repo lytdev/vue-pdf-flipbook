@@ -1,6 +1,6 @@
 import { onScopeDispose } from 'vue'
 import type { Ref } from 'vue'
-import { PageFlip } from 'page-flip'
+import { PageFlip } from '../vendor/page-flip.js'
 import type { ReaderMode } from '../types'
 import type { PageSize } from './types'
 
@@ -147,8 +147,9 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     engineState = 'read'
     pageCloneObserver?.disconnect()
     pageCloneObserver = undefined
-    pageFlip?.destroy()
+    const previous = pageFlip
     pageFlip = undefined
+    previous?.destroy()
   }
 
   onScopeDispose(destroy)

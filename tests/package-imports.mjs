@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdir, readFile, rm, writeFile, access } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile, access, readdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import { build, createServer } from 'vite'
 
 async function checkWorker(code) {
   assert.ok(!/['"]\/assets\/pdf\.worker/.test(code), 'Worker must not use a host-root asset path')
-  const url = code.match(/data:[^"'\s]*;base64,[A-Za-z0-9+/=]+/)?.[0]
+  const url = code.match(/data:(?:text|application)\/javascript[^"'\s]*;base64,[A-Za-z0-9+/=]+/)?.[0]
   assert.ok(url, 'Worker must be embedded in the published module')
   const response = await fetch(url)
   assert.ok((await response.text()).includes('WorkerMessageHandler'))
@@ -39,6 +39,13 @@ try {
   await mkdir(installed, { recursive: true })
   execFileSync('tar', ['-xzf', path.join(fixture, archive.filename), '-C', installed, '--strip-components=1'])
   const packed = JSON.parse(await readFile(path.join(installed, 'package.json'), 'utf8'))
+  const chunks = (await readdir(path.join(installed, 'dist'))).filter((name) => name.endsWith('.js'))
+  await access(path.join(installed, 'dist/LICENSE.page-flip'))
+  // 真正从 tarball 导入并 SSR 渲染，确保入口不提前求值浏览器 PDF.js。
+  const libraryModule = await import(pathToFileURL(path.join(installed, packed.main)).href)
+  const { createSSRApp } = await import('vue')
+  const { renderToString } = await import('@vue/server-renderer')
+  assert.ok((await renderToString(createSSRApp(libraryModule.VuePdfFlipbook, { url: 'https://example.com/book.pdf' }))).includes('vpf-'))
   for (const entry of [packed.main, packed.module, packed.types, ...Object.values(packed.exports['.']), packed.exports['./style.css']]) {
     await access(path.join(installed, entry))
   }
@@ -87,8 +94,8 @@ export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail,
     await server.listen()
     const transformed = await server.transformRequest('/consumer.ts')
     assert.ok(transformed?.code.includes('vue-pdf-flipbook.js'), 'Vite must resolve the published JS entry')
-    const library = await server.transformRequest(`/node_modules/${packed.name}/${packed.module.replace('./', '')}`)
-    await checkWorker(library.code)
+    const modules = await Promise.all(chunks.map((name) => server.transformRequest(`/node_modules/${packed.name}/dist/${name}`)))
+    await checkWorker(modules.map((module) => module.code).join('\n'))
   } finally {
     await server.close()
   }
@@ -106,7 +113,14 @@ export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail,
     const optimizedImport = consumer.match(/"([^"\n]*\/deps\/[^"\n]*flipbook[^"\n]*)"/)
     assert.ok(optimizedImport, 'Consumer must exercise Vite dependency pre-bundling')
     const optimizedCode = await (await fetch(new URL(optimizedImport[1], origin))).text()
-    await checkWorker(optimizedCode)
+    assert.ok(optimizedCode.includes('VuePdfFlipbook'))
+    // Worker 现在位于延迟模块，验证这些模块经开发服务器处理后仍可加载。
+    const lazyModules = await Promise.all(chunks.map(async (name) => {
+      const response = await fetch(`${origin}/node_modules/${packed.name}/dist/${name}`)
+      assert.equal(response.status, 200)
+      return response.text()
+    }))
+    await checkWorker(lazyModules.join('\n'))
   } finally {
     await optimizedServer.close()
   }

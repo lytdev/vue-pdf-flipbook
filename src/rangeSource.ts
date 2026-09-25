@@ -1,3 +1,5 @@
+import { withTimeout } from './withTimeout'
+
 export const rangeChunkSize = 64 * 1024
 
 /**
@@ -88,32 +90,37 @@ async function requestRange(url: string, begin: number, end: number, signal: Abo
  * @returns Promise，解析为文件总长度、首段数据及 read(begin, end) 方法。
  */
 export async function openRangeSource(url: string, signal: AbortSignal, fileSize?: number) {
-  const response = await requestRange(url, 0, rangeChunkSize, signal)
-  try {
-    const range = contentRange(response)
-    // HEAD 长度可能对应压缩传输体，不能作为 Range 偏移依据；优先使用 Content-Range。
-    const length = range?.length ?? positiveLength(fileSize === undefined ? null : String(fileSize))
-    if (fileSize !== undefined && positiveLength(String(fileSize)) !== length) {
-      throw new Error('fileSize 与服务器的 PDF 原始字节数不一致')
+  const initial = await withTimeout(signal, async (requestSignal) => {
+    const response = await requestRange(url, 0, rangeChunkSize, requestSignal)
+    try {
+      const range = contentRange(response)
+      // HEAD 长度可能对应压缩传输体，不能作为 Range 偏移依据；优先使用 Content-Range。
+      const length = range?.length ?? positiveLength(fileSize === undefined ? null : String(fileSize))
+      if (fileSize !== undefined && positiveLength(String(fileSize)) !== length) {
+        throw new Error('fileSize 与服务器的 PDF 原始字节数不一致')
+      }
+      const end = Math.min(rangeChunkSize, length)
+      if (range && (range.begin !== 0 || range.end !== end)) throw new Error('PDF 初始分段范围不匹配')
+      const initialData = await readChunk(response, end)
+      return { length, initialData }
+    } finally {
+      if (!response.bodyUsed) void response.body?.cancel().catch(() => undefined)
     }
-    const end = Math.min(rangeChunkSize, length)
-    if (range && (range.begin !== 0 || range.end !== end)) throw new Error('PDF 初始分段范围不匹配')
-    const initialData = await readChunk(response, end)
-    return {
-      length,
-      initialData,
-      /**
-       * 按需读取后续字节段，并验证响应范围与文档总长度。
-       * 调用逻辑：PDFDataRangeTransport 的 requestDataRange 调用。
-       * @param begin 包含的起始偏移。
-       * @param end 不包含的结束偏移。
-       * @returns Promise<Uint8Array>；参数或服务器响应不符时拒绝。
-       */
-      async read(begin: number, end: number) {
-        if (!Number.isInteger(begin) || !Number.isInteger(end) || begin < 0 || end > length || begin >= end) {
-          throw new Error('PDF 分段请求范围无效')
-        }
-        const chunk = await requestRange(url, begin, end, signal)
+  })
+  const { length, initialData } = initial
+  return {
+    length, initialData,
+    /**
+     * 按需读取后续字节段，并验证响应范围与文档总长度。
+     * @param begin 包含的起始偏移。
+     * @param end 不包含的结束偏移。
+     */
+    async read(begin: number, end: number) {
+      if (!Number.isInteger(begin) || !Number.isInteger(end) || begin < 0 || end > length || begin >= end) {
+        throw new Error('PDF 分段请求范围无效')
+      }
+      return withTimeout(signal, async (requestSignal) => {
+        const chunk = await requestRange(url, begin, end, requestSignal)
         try {
           // 后续分段必须仍对应同一文件长度和请求范围，防止拼接到错误字节位置。
           const actual = contentRange(chunk)
@@ -121,14 +128,10 @@ export async function openRangeSource(url: string, signal: AbortSignal, fileSize
             throw new Error('PDF 分段响应范围或文档长度发生变化')
           }
           return await readChunk(chunk, end - begin)
-        } catch (error) {
-          if (!chunk.bodyUsed) await chunk.body?.cancel()
-          throw error
+        } finally {
+          if (!chunk.bodyUsed) void chunk.body?.cancel().catch(() => undefined)
         }
-      },
-    }
-  } catch (error) {
-    if (!response.bodyUsed) await response.body?.cancel()
-    throw error
+      })
+    },
   }
 }
