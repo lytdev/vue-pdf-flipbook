@@ -39,7 +39,35 @@ try {
   await mkdir(installed, { recursive: true })
   execFileSync('tar', ['-xzf', path.join(fixture, archive.filename), '-C', installed, '--strip-components=1'])
   const packed = JSON.parse(await readFile(path.join(installed, 'package.json'), 'utf8'))
+  const publishedCss = await readFile(path.join(installed, packed.exports['./style.css']), 'utf8')
+  assert.ok(!/[\r\n]/.test(publishedCss), 'Published CSS must be minified to a single line')
+  assert.ok(!publishedCss.includes('/*$vite$:'), 'Published CSS must not contain Vite output markers')
+  const publishedJs = await readFile(path.join(installed, packed.main), 'utf8')
+  assert.ok(!/[\r\n]/.test(publishedJs), 'Published entry JS must not contain multiline embedded styles')
   const chunks = (await readdir(path.join(installed, 'dist'))).filter((name) => name.endsWith('.js'))
+  for (const name of chunks) {
+    const code = await readFile(path.join(installed, 'dist', name), 'utf8')
+    assert.ok(!/[\r\n]/.test(code), `Published JS chunk ${name} must be a single line`)
+  }
+  // 压缩物理换行不能改动 PDF.js 内嵌 WebGPU 着色器的运行时文本。
+  function shaderText(filename, code) {
+    const source = ts.createSourceFile(filename, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+    let shader
+    function visit(node) {
+      if (ts.isNoSubstitutionTemplateLiteral(node) && node.getText(source).includes('struct Uniforms')) {
+        shader = node.text
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+    return shader
+  }
+  const originalShader = shaderText('pdf.mjs', await readFile(path.join(root, 'node_modules/pdfjs-dist/build/pdf.mjs'), 'utf8'))
+  const pdfChunk = chunks.find((name) => /^pdf-.*\.js$/.test(name))
+  assert.ok(pdfChunk, 'Bundled PDF.js chunk must exist')
+  const bundledShader = shaderText(pdfChunk, await readFile(path.join(installed, 'dist', pdfChunk), 'utf8'))
+  assert.ok(originalShader && bundledShader && originalShader === bundledShader,
+    'Bundled PDF.js shader text must match the dependency source')
   await access(path.join(installed, 'dist/LICENSE.page-flip'))
   // 真正从 tarball 导入并 SSR 渲染，确保入口不提前求值浏览器 PDF.js。
   const libraryModule = await import(pathToFileURL(path.join(installed, packed.main)).href)
