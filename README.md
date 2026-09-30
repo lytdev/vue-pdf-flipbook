@@ -6,11 +6,43 @@
 * [The Online Flipbook Maker](https://www.paperturn.com/)
 * [turnjs](https://www.turnjs.cn/)
 
-## 安装与使用
+## 目录
+
+- [安装](#安装)
+- [在业务页面使用](#在业务页面使用)
+- [外部容器：放大、缩小与全屏](#外部容器放大缩小与全屏)
+- [Props](#props)、[事件](#事件)、[实例方法](#实例方法)
+- [自定义插槽](#外部功能接入)
+- [常见接入问题](#常见接入问题)
+- [开发](#开发)
+
+## 安装
+
+适用于 Vue 3.4+ 项目，Node.js 要求为 22.15+。以下命令任选一个，在调用方项目根目录执行：
+
+```bash
+pnpm add @agilehub/vue-pdf-flipbook
+```
 
 ```bash
 npm install @agilehub/vue-pdf-flipbook
 ```
+
+```bash
+yarn add @agilehub/vue-pdf-flipbook
+```
+
+包名为 `@agilehub/vue-pdf-flipbook`，安装、组件导入和类型导入都使用这个完整名称。Vue 是 peer dependency，由业务项目提供；PDF.js 和 Worker 已由组件提供，普通接入不需要额外安装 `pdfjs-dist` 或复制 Worker。
+
+在应用入口或使用组件的页面引入一次样式：
+
+```ts
+import '@agilehub/vue-pdf-flipbook/style.css'
+```
+
+## 在业务页面使用
+
+下面可保存为业务项目中的 `PdfReader.vue`。它接收 PDF 地址，提供翻页、缩略图开关、错误提示与重试。PDF 地址必须支持 HTTP Range / 206；跨域时还需要 CORS，具体要求见[大文件按需预览](#大文件按需预览)。
 
 ```vue
 <script setup lang="ts">
@@ -19,28 +51,228 @@ import { VuePdfFlipbook } from '@agilehub/vue-pdf-flipbook'
 import type { PdfFlipbookExpose, PdfFlipbookState } from '@agilehub/vue-pdf-flipbook'
 import '@agilehub/vue-pdf-flipbook/style.css'
 
+const props = defineProps<{ url: string; fileSize?: number }>()
 const reader = ref<PdfFlipbookExpose>()
 const state = ref<PdfFlipbookState>()
+const errorMessage = ref('')
+
+function onError(error: unknown) {
+  errorMessage.value = error instanceof Error ? error.message : String(error)
+}
+
+function onStateChange(value: PdfFlipbookState) {
+  state.value = value
+  if (value.loading) errorMessage.value = ''
+}
 </script>
 
 <template>
-  <VuePdfFlipbook
-    ref="reader"
-    url="https://example.com/catalog.pdf"
-    :height="720"
-    @state-change="state = $event"
-  />
-  <p v-if="state?.loading">加载中 {{ state.progress }}%</p>
-  <p v-if="state?.error">{{ state.error }}</p>
-  <button :disabled="!state?.canPrevious" @click="reader?.previous()">上一页</button>
-  <span>{{ state?.page }} / {{ state?.pages }}</span>
-  <button :disabled="!state?.canNext" @click="reader?.next()">下一页</button>
+  <section class="vpf-example-page">
+    <nav class="vpf-example-toolbar" aria-label="阅读工具栏">
+      <button :disabled="!state?.canPrevious || state?.pageLoading" @click="reader?.previous()">上一页</button>
+      <span>{{ state?.page ?? 1 }} / {{ state?.pages ?? 0 }}</span>
+      <button :disabled="!state?.canNext || state?.pageLoading" @click="reader?.next()">下一页</button>
+      <button :disabled="!state?.pages || state?.loading" @click="state?.thumbnailsVisible ? reader?.hideThumbnails() : reader?.showThumbnails()">缩略图</button>
+    </nav>
+    <p v-if="errorMessage" role="alert">
+      {{ errorMessage }} <button @click="reader?.reload()">重试</button>
+    </p>
+    <div class="vpf-example-reader">
+      <VuePdfFlipbook
+        ref="reader" :url="props.url" :file-size="props.fileSize"
+        height="100%" loading-text="文档加载中，请稍候…"
+        @state-change="onStateChange" @error="onError"
+      />
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.vpf-example-page { display: flex; flex-direction: column; width: 100%; height: 80dvh; min-width: 0; min-height: 0; overflow: hidden; }
+.vpf-example-toolbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
+.vpf-example-reader { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+</style>
+```
+
+父页面使用这个业务封装，例如在同目录的 `App.vue` 中：
+
+```vue
+<script setup lang="ts">
+import PdfReader from './PdfReader.vue'
+</script>
+
+<template>
+  <!-- 将 public/catalog.pdf 替换成你的文件，并确保服务端支持 Range / 206。 -->
+  <PdfReader url="/catalog.pdf" />
 </template>
 ```
 
-也支持 `app.use(PdfFlipbook)` 全局注册，`PdfFlipbook` 为默认导出。
+也支持全局注册，在业务项目的 `main.ts` 中使用默认导出：
 
-发布包名为 `@agilehub/vue-pdf-flipbook`，安装和导入必须使用相同名称。
+```ts
+import { createApp } from 'vue'
+import App from './App.vue'
+import PdfFlipbook from '@agilehub/vue-pdf-flipbook'
+import '@agilehub/vue-pdf-flipbook/style.css'
+
+createApp(App).use(PdfFlipbook).mount('#app')
+```
+
+注册后可直接使用 `<VuePdfFlipbook />`。需要调用实例方法时，仍应导入 `PdfFlipbookExpose` 为组件 ref 标注类型。
+
+## 外部容器：放大、缩小与全屏
+
+组件根据父容器的实际尺寸适配书页。它没有 `zoom` 属性或 `zoomIn()` / `zoomOut()` 方法；业务页面通过调整包裹组件的内容层尺寸实现缩放。
+
+容器分为三层：
+
+| 层级 | 职责 | 关键样式 |
+| --- | --- | --- |
+| 页面容器 | 确定阅读区域总高度，容纳工具栏和阅读区 | 明确的 `height`、纵向 flex、`overflow: hidden` |
+| 滚动视口 | 高度不随倍率增长，放大后允许滚动查看 | `flex: 1; min-width: 0; min-height: 0; overflow: auto` |
+| 缩放内容层 | 宽和高同时乘以倍率，组件占满该层 | `flex: none`，动态 `width` 和 `height`，组件 `height="100%"` |
+
+只修改宽度时，书页可能仍受原高度约束，看起来没有变大；使用 `transform: scale()` 也不会改变正常布局尺寸。下面采用宽高同步变化，让组件的 ResizeObserver 和翻页引擎按实际新尺寸重新适配。
+
+### 完整示例：缩放、鼠标拖动平移、恢复与全屏
+
+此示例可以作为另一个业务组件 `ZoomPdfReader.vue`，通过 `<ZoomPdfReader :url="pdfUrl" />` 使用。工具栏放在滚动视口之外，保持原尺寸。默认倍率下支持书页拖拽翻页；放大后鼠标拖动用于平移，翻页使用外部工具栏。
+
+```vue
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { VuePdfFlipbook } from '@agilehub/vue-pdf-flipbook'
+import type { PdfFlipbookExpose, PdfFlipbookState } from '@agilehub/vue-pdf-flipbook'
+import '@agilehub/vue-pdf-flipbook/style.css'
+
+const props = defineProps<{ url: string; fileSize?: number }>()
+const reader = ref<PdfFlipbookExpose>()
+const shell = ref<HTMLElement>()
+const scroll = ref<HTMLElement>()
+const state = ref<PdfFlipbookState>()
+const zoom = ref(1)
+const dragging = ref(false)
+const errorMessage = ref('')
+let pan: { id: number; x: number; y: number; left: number; top: number } | undefined
+
+function changeZoom(value: number) {
+  zoom.value = Math.max(0.5, Math.min(2.5, Math.round(value * 100) / 100))
+}
+
+function stopPan() {
+  const id = pan?.id
+  pan = undefined
+  dragging.value = false
+  if (id !== undefined && scroll.value?.hasPointerCapture(id)) scroll.value.releasePointerCapture(id)
+}
+
+function startPan(event: PointerEvent) {
+  const element = scroll.value
+  if (!element || zoom.value <= 1 || event.pointerType !== 'mouse' || event.button !== 0 || !event.isPrimary) return
+  // 自定义控件可加 data-no-pan，避免被平移逻辑接管。
+  if ((event.target as Element).closest('button, input, a, [data-no-pan]')) return
+  event.preventDefault()
+  event.stopPropagation()
+  pan = { id: event.pointerId, x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop }
+  dragging.value = true
+  element.setPointerCapture(event.pointerId)
+}
+
+function movePan(event: PointerEvent) {
+  if (!pan || !scroll.value || event.pointerId !== pan.id) return
+  if (!(event.buttons & 1)) {
+    stopPan()
+    return
+  }
+  event.preventDefault()
+  scroll.value.scrollLeft = pan.left - (event.clientX - pan.x)
+  scroll.value.scrollTop = pan.top - (event.clientY - pan.y)
+}
+
+function endPan(event: PointerEvent) {
+  if (event.pointerId === pan?.id) stopPan()
+}
+
+function onError(error: unknown) {
+  errorMessage.value = error instanceof Error ? error.message : String(error)
+}
+
+function onStateChange(value: PdfFlipbookState) {
+  state.value = value
+  if (value.loading || value.pageLoading) stopPan()
+  if (value.loading) {
+    errorMessage.value = ''
+    zoom.value = 1
+  }
+}
+
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement === shell.value) await document.exitFullscreen()
+    else await shell.value?.requestFullscreen()
+  } catch (error) { onError(error) }
+}
+
+watch(zoom, async (value) => {
+  stopPan()
+  await nextTick()
+  if (value <= 1) scroll.value?.scrollTo(0, 0)
+})
+onBeforeUnmount(stopPan)
+</script>
+
+<template>
+  <section ref="shell" class="vpf-zoom-page">
+    <nav class="vpf-zoom-toolbar" aria-label="阅读工具栏">
+      <button :disabled="!state?.canPrevious || state?.pageLoading" @click="reader?.previous()">上一页</button>
+      <span>{{ state?.page ?? 1 }} / {{ state?.pages ?? 0 }}</span>
+      <button :disabled="!state?.canNext || state?.pageLoading" @click="reader?.next()">下一页</button>
+      <button :disabled="zoom <= 0.5" @click="changeZoom(zoom - 0.25)">缩小</button>
+      <button @click="changeZoom(1)">{{ Math.round(zoom * 100) }}% · 恢复</button>
+      <button :disabled="zoom >= 2.5" @click="changeZoom(zoom + 0.25)">放大</button>
+      <button @click="toggleFullscreen">切换全屏</button>
+    </nav>
+    <p v-if="errorMessage" role="alert">{{ errorMessage }} <button @click="reader?.reload()">重试</button></p>
+    <div
+      ref="scroll" class="vpf-zoom-scroll"
+      :class="{ 'is-zoomed': zoom > 1, 'is-dragging': dragging }"
+      @pointerdown.capture="startPan" @pointermove="movePan"
+      @pointerup="endPan" @pointercancel="endPan" @lostpointercapture="endPan"
+    >
+      <div class="vpf-zoom-content" :style="{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }">
+        <VuePdfFlipbook
+          ref="reader" :url="props.url" :file-size="props.fileSize" height="100%"
+          @state-change="onStateChange" @error="onError"
+        />
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.vpf-zoom-page { display: flex; flex-direction: column; width: 100%; height: 80dvh; min-width: 0; min-height: 0; overflow: hidden; background: #edf0eb; }
+.vpf-zoom-toolbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
+.vpf-zoom-scroll { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.vpf-zoom-content { flex: none; margin: auto; }
+.vpf-zoom-scroll.is-zoomed { overflow: auto; cursor: grab; user-select: none; }
+.vpf-zoom-scroll.is-dragging { cursor: grabbing; }
+/* 放大时把鼠标操作交给外层平移，避免同时触发书页折角或拖拽翻页。 */
+.vpf-zoom-scroll.is-zoomed :deep(.vpf-book-stage),
+.vpf-zoom-scroll.is-zoomed :deep(.vpf-book-stage *) { pointer-events: none; }
+.vpf-zoom-page:fullscreen { width: 100%; height: 100%; }
+</style>
+```
+
+上述 `pointer-events` 规则也会禁用书页上的内置按钮和底部缩略图，因此放大时使用外部工具栏，以及放在缩放内容层之外的自定义侧栏。若只需要滚轮/滚动条浏览、希望继续使用书页拖拽翻页，可去掉指针事件处理、`is-dragging` 和该 `pointer-events` 规则。
+
+### 容器布局注意事项
+
+- 示例采用 `80dvh`。在后台管理页面可改成 `calc(100dvh - 64px)`；只有父级高度已经确定时才使用 `height: 100%`。全页应用也可在全局设置 `html, body, #app { height: 100%; margin: 0; }`。
+- flex 或 grid 布局中，阅读区及中间容器都需要 `min-width: 0; min-height: 0`，否则内容可能撑开父级，使整个页面产生滚动条。
+- 缩放层需要 `flex: none`，否则 flex 自动收缩可能抵消放大。组件继续使用 `height="100%"`，不要同时写死为 `720px`。
+- 固定侧栏、工具栏放在缩放层之外；横向覆盖式缩略图可放在外层定位容器中，使其保持业务指定的尺寸。
+- 放大改变布局尺寸，正文 Canvas 仍遵守组件的分辨率上限；很高倍率下可能变模糊。事件返回的缩略图用于预览，不应作为大图阅读源。
+- 全屏目标应包含阅读区、工具栏和 Teleport 的缩略图目标。Teleport 到全屏元素之外的内容不会跟随显示。
 
 ## Props
 
@@ -54,6 +286,8 @@ const state = ref<PdfFlipbookState>()
 | `background` | `string` | `'transparent'` | 背景色 |
 | `workerSrc` | `string` | 内置 Worker | 自定义 PDF.js Worker URL |
 | `loadingText` | `string` | `'PDF 加载中…'` | 首次加载和重新加载时遮罩中的标题文字，支持动态更新 |
+| `showPreviousButton` | `boolean` | `true` | 显示上一页按钮或其自定义插槽，仍遵守首尾页和动画显示规则 |
+| `showNextButton` | `boolean` | `true` | 显示下一页按钮或其自定义插槽，仍遵守首尾页和动画显示规则 |
 
 双页模式在空间不足时自动显示单页。`visiblePages` 反映实际显示页，而 `mode` 表示选择的模式。
 
@@ -82,6 +316,8 @@ const state = ref<PdfFlipbookState>()
 调用方可设置 `:show-previous-button="false"` 或 `:show-next-button="false"` 分别隐藏内置按钮，两者默认均为 `true`，属性变化会立即更新显示。隐藏按钮只影响界面；`previous()`、`next()`、缩略图和翻页手势仍可使用。上述首页、末页及动画期间的隐藏规则继续生效。
 
 使用 `#previous-button` 和 `#next-button` 可分别替换整个按钮。插槽提供 `disabled` 和 `navigate()`；外部按钮应绑定禁用状态，并在点击时调用 `navigate()`。插槽仍受对应的 `showPreviousButton` / `showNextButton` 属性及首尾页、封面动画期间的显示规则控制。外部负责按钮的布局与样式；可以沿用默认的 `vpf-page-nav`、`vpf-page-nav--previous` / `vpf-page-nav--next` 类，也可以使用自己的类。
+
+下面的模板片段放入前面的业务页面中。按钮内容可换成业务图标或 UI 组件。建议使用原生 `button`；普通 `div` 的 `disabled` 属性不会提供原生禁用和键盘操作，需要自行实现。若使用自己的 CSS 类，请设置定位，否则组件不会自动为插槽内容补上按钮样式。
 
 ```vue
 <VuePdfFlipbook :url="pdfUrl">
@@ -141,6 +377,7 @@ function onPageChange(page: number, thumbnailUrl: string | null) {
 | `reload()` | 重新加载当前 URL，返回 `Promise<void>`，错误通过事件报告 |
 | `getState()` | 获取当前状态快照 |
 | `getDocument()` | 获取 `PDFDocumentProxy`，未加载时为 `undefined` |
+| `showThumbnails()` / `hideThumbnails()` | 更新缩略图显示状态；完整列表插槽须使用 `visible` 控制自身显示 |
 
 文档由组件管理，外部不要调用 `destroy()` 或 `cleanup()`。URL 变化、重新加载或组件卸载后应丢弃旧引用；Vue 中使用 `shallowRef` 保存代理对象。
 
@@ -195,13 +432,24 @@ function onError(error: unknown) {
 <VuePdfFlipbook :url="file.url" :file-size="file.size" />
 ```
 
-`file.size` 应来自上传文件的 `File.size` 或后端文件元数据。不能使用可能被 gzip/br 压缩的 HEAD `Content-Length`。未暴露 `Content-Range` 且未提供 `fileSize` 时会明确报错；不会猜测长度或下载全文。demo 已为当前示例 URL 配置实测原始大小，换用其他 URL 时需暴露响应头或提供该文件自己的大小。`blob:` / `data:` URL 和不支持 Range 的服务器不适用于此分段传输模式。
+`file.size` 应来自上传文件的 `File.size` 或后端文件元数据。不能使用可能被 gzip/br 压缩的 HEAD `Content-Length`。未暴露 `Content-Range` 且未提供 `fileSize` 时会明确报错；不会猜测长度或下载全文。换用其他 URL 时需暴露响应头或提供该文件自己的大小。`blob:` / `data:` URL 和不支持 Range 的服务器不适用于此分段传输模式。
 
 PDF 的页与字节段不是一一对应：解析索引、字体及共享资源可能读取窗口之外的字节。因此这里限制的是页面渲染窗口，并尽量按需请求文件字节，不保证只下载这几页的数据，也不保证 PDF.js 已下载的数据缓存固定大小。`loaded` 表示文档可用，并不要求下载进度达到 100%。
 
 内置缩略图只渲染当前可见页前后各 5 页的窗口，其余页保留页码按钮，点击后按需跳转，避免缩略图触发全书渲染。
 
 ## 外部功能接入
+
+### 插槽一览
+
+| 插槽 | 参数 | 由调用方负责的内容 |
+| --- | --- | --- |
+| `previous-button` | `{ disabled, navigate }` | 上一页按钮的标签、样式与点击绑定 |
+| `next-button` | `{ disabled, navigate }` | 下一页按钮的标签、样式与点击绑定 |
+| `thumbnail` | `{ page, pdf, isActive, shouldRender }` | 单项缩略图内容；外层点击和布局仍由组件处理 |
+| `thumbnails` | `{ pdf, items, visible, pageAspectRatio, select, hide, reportError }` | 整个缩略图列表的布局、位置、尺寸和交互 |
+
+只提供需要替换的插槽即可。翻页按钮示例见 [Props](#props) 下方；缩略图示例见本节。加载标题使用 `loadingText` 属性，目前没有 `loading` 或 `toolbar` 插槽。
 
 ### 缩略图扩展：按需选择一个插槽
 
@@ -228,7 +476,9 @@ PDF 的页与字节段不是一一对应：解析索引、字体及共享资源�
 
 插槽在加载期间也可用，便于自定义空状态。请通过 `pdf && visible` 控制预览挂载，并仅在 `item.shouldRender` 时创建 `PdfCanvasPage`，防止缩略图抢占正文资源或触发全书渲染。更换 PDF 时插槽子树会重新挂载，释放旧预览。自定义列表负责自己的滚动、拖动、键盘可访问性和封面动画行为；组件不会强制干预这些交互。
 
-下面的例子不使用额外缩略图属性。单项宽高、边框、额外按钮都由业务模板决定：
+### 横向覆盖阅读区的缩略图
+
+下面是可独立使用的业务组件示例。单项宽高、边框、额外按钮都由业务模板决定：
 
 ```vue
 <script setup lang="ts">
@@ -274,7 +524,7 @@ const reader = ref<PdfFlipbookExpose>()
 </template>
 
 <style scoped>
-.reader-wrap { height: 600px; }
+.reader-wrap { position: relative; height: 600px; min-width: 0; min-height: 0; }
 .my-thumbnails { position: absolute; z-index: 20; left: 10%; right: 10%; bottom: 12px; background: #ffffffdd; }
 .my-thumbnail-list { display: flex; gap: 8px; overflow: auto; max-height: 180px; }
 .my-thumbnail { flex: 0 0 auto; width: 96px; }
@@ -283,28 +533,155 @@ const reader = ref<PdfFlipbookExpose>()
 </style>
 ```
 
-这会横向覆盖阅读区域。需要外部两列侧栏时，在页面布局中放置固定存在的目标容器（例如 `<aside id="pdf-sidebar" />`），用 `<Teleport v-if="pdf && visible" to="#pdf-sidebar">` 包裹插槽里的 `section`。将 `.my-thumbnails` 改为普通布局，再将列表 CSS 改为：
+缩略图相对于 `.reader-wrap` 定位；`position: relative` 用于建立定位参照。若与缩放示例组合，固定尺寸的覆盖列表应 Teleport 到缩放层之外的定位容器；直接放在缩放内容层里会跟随该层的位置变化。
 
-```css
-.my-thumbnail-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: auto; max-height: 100%; }
-.my-thumbnail { width: auto; min-width: 0; }
+### 外部两列侧栏与点击事件
+
+下面示例可保存为 `SidebarPdfReader.vue`。它使用元素 ref 作为 Teleport 目标，多份阅读器不会共享同一个固定 ID。先挂载侧栏容器，再挂载阅读器；侧栏用 `v-show` 显隐，避免 Teleport 目标被移除。
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { VuePdfFlipbook, PdfCanvasPage } from '@agilehub/vue-pdf-flipbook'
+import type { PdfFlipbookExpose, PdfFlipbookState, PdfThumbnailsSlotProps } from '@agilehub/vue-pdf-flipbook'
+import '@agilehub/vue-pdf-flipbook/style.css'
+
+const props = defineProps<{ url: string; fileSize?: number }>()
+const emit = defineEmits<{ 'thumbnail-click': [page: number] }>()
+const reader = ref<PdfFlipbookExpose>()
+const state = ref<PdfFlipbookState>()
+const thumbnailTarget = ref<HTMLElement | null>(null)
+const errorMessage = ref('')
+
+function onThumbnailClick(page: number, select: PdfThumbnailsSlotProps['select']) {
+  emit('thumbnail-click', page) // 这是业务封装发出的事件，page 从 1 开始。
+  void select(page)
+}
+
+function onError(error: unknown) {
+  errorMessage.value = error instanceof Error ? error.message : String(error)
+}
+</script>
+
+<template>
+  <section class="vpf-sidebar-page">
+    <nav class="vpf-sidebar-toolbar">
+      <button :disabled="!state?.pages || state?.loading" @click="state?.thumbnailsVisible ? reader?.hideThumbnails() : reader?.showThumbnails()">切换缩略图</button>
+      <span>{{ state?.page ?? 1 }} / {{ state?.pages ?? 0 }}</span>
+    </nav>
+    <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+    <div class="vpf-sidebar-layout" :class="{ 'is-sidebar-open': state?.thumbnailsVisible }">
+      <aside ref="thumbnailTarget" v-show="state?.thumbnailsVisible" class="vpf-sidebar-target" aria-label="缩略图侧栏" />
+      <main class="vpf-sidebar-main">
+        <!-- 如需缩放，把前述滚动视口和缩放内容层放在 main 内，aside 保留在外侧。 -->
+        <VuePdfFlipbook
+          v-if="thumbnailTarget" ref="reader" :url="props.url" :file-size="props.fileSize"
+          height="100%" @state-change="state = $event" @error="onError"
+        >
+          <template #thumbnails="{ pdf, items, visible, select, reportError, pageAspectRatio }">
+            <Teleport v-if="pdf && visible && thumbnailTarget" :to="thumbnailTarget">
+              <nav class="vpf-sidebar-grid" aria-label="PDF 缩略图">
+                <button
+                  v-for="item in items" :key="item.page" type="button"
+                  class="vpf-sidebar-item" :aria-label="`跳转到第 ${item.page} 页`"
+                  :aria-current="item.isActive ? 'page' : undefined"
+                  @click.stop="onThumbnailClick(item.page, select)"
+                >
+                  <PdfCanvasPage
+                    v-if="item.shouldRender" :pdf="pdf" :page-number="item.page"
+                    :render-scale="0.22" @error="reportError"
+                  />
+                  <div v-else :style="{ aspectRatio: pageAspectRatio }" />
+                  <span>第 {{ item.page }} 页</span>
+                </button>
+              </nav>
+            </Teleport>
+          </template>
+        </VuePdfFlipbook>
+      </main>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.vpf-sidebar-page { display: flex; flex-direction: column; height: 80dvh; min-width: 0; min-height: 0; overflow: hidden; }
+.vpf-sidebar-toolbar { display: flex; flex: none; gap: 8px; padding: 8px; }
+.vpf-sidebar-layout { display: grid; grid-template-columns: minmax(0, 1fr) 0; grid-template-rows: minmax(0, 1fr); flex: 1; min-width: 0; min-height: 0; }
+.vpf-sidebar-layout.is-sidebar-open { grid-template-columns: minmax(0, 1fr) min(240px, 40%); }
+.vpf-sidebar-main { display: flex; grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.vpf-sidebar-target { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: auto; padding: 8px; background: #edf0eb; box-sizing: border-box; }
+.vpf-sidebar-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.vpf-sidebar-item { min-width: 0; width: 100%; padding: 4px; border: 2px solid transparent; background: white; cursor: pointer; }
+.vpf-sidebar-item[aria-current='page'] { border-color: #36835c; }
+</style>
 ```
 
-侧栏容器的宽高、展开与收起由业务页面控制。挂载目标需在 Teleport 启用时存在。自定义宽高可以直接写在 `.my-thumbnail`、内层预览或绑定的 `style` 上，不再受组件的 `86px` 宽度限制。
+父页面可以监听业务封装的 `@thumbnail-click="onThumbnailClick"`，获取点击的确切页码。原始 `VuePdfFlipbook` 没有 `thumbnail-click` 事件；在完整列表插槽中，点击由自己的元素处理。`page-change` 表示实际阅读页变化，双栏时它可能是所点击页所在页组的左页；重复点击当前可见页仍可触发业务点击事件，但不一定发生翻页。
+
+`item.isActive` 用于阅读页同步高亮，`item.shouldRender` 用于控制 Canvas 是否创建。单项宽高直接通过自己的 CSS 决定，图片容器应保持比例；`pageAspectRatio` 是 PDF 首页比例，混合尺寸文档中仅适合用作未渲染项的占位参考。`select(page)` 完成表示请求已启动、取消或被忽略，不代表翻页动画已经结束。
+
+### 只替换单项内容
+
+若保留组件内置列表和点击跳页，只需使用 `#thumbnail`。以下是替换内容的模板片段，`PdfCanvasPage` 需要从包入口导入：
+
+```vue
+<VuePdfFlipbook ref="reader" :url="pdfUrl">
+  <template #thumbnail="{ page, pdf, isActive, shouldRender }">
+    <div :class="{ selected: isActive }" @click="console.log('点击缩略图', page)">
+      <PdfCanvasPage v-if="shouldRender" :pdf="pdf" :page-number="page" :render-scale="0.22" @error="onError" />
+      <span>第 {{ page }} 页</span>
+    </div>
+  </template>
+</VuePdfFlipbook>
+```
+
+单项插槽外层仍有组件提供的可点击 `div`。不要在上例的点击监听中使用 `.stop`，否则事件无法传到该外层并自动跳页。需要完全控制外层宽高、键盘交互和跳页行为时，使用前述 `#thumbnails`。
 
 `#thumbnail` 的参数仍为 `PdfThumbnailSlotProps`：`page`、`pdf`、`isActive`、`shouldRender`。已有 `thumbnailTarget`、`thumbnailLayout`、`thumbnailColumns`、`thumbnailItemStyle` 保留兼容并标记为 deprecated；新代码优先迁移到 `#thumbnails`，该插槽会忽略这些旧配置。原有调用不需要立即修改。
 
 - 工具栏、进度滑块、键盘快捷键：调用翻页方法并监听状态事件。
 - 加载提示、错误提示、重试：监听状态或 `error`，调用 `reload()`。
-- 缩略图：调用 `showThumbnails()` / `hideThumbnails()`，或通过 `thumbnail` 插槽自定义单项内容，见下方示例。
+- 缩略图：调用 `showThumbnails()` / `hideThumbnails()`，结合本节的单项或完整列表插槽。
 - 全屏：在外部容器上调用浏览器 Fullscreen API，组件自动响应容器尺寸变化。
-- 缩放和平移：由外部包装容器实现变换和滚动，不属于翻页组件 API。
+- 缩放和平移：由外部包装容器改变尺寸并处理滚动，完整代码见[外部容器示例](#外部容器放大缩小与全屏)。
 
 `src/demo/App.vue` 展示外部控件接入：放大后按住鼠标左键拖动可平移阅读区域，松开即停止；恢复 100% 时重置滚动位置并恢复书页拖拽翻页。放大时仍可通过外部按钮翻页。平移逻辑位于 demo，核心组件不会自动处理键盘事件或创建弹层。
 
+## 常见接入问题
+
+### 安装后提示找不到组件入口或类型
+
+确认安装和导入的都是 `@agilehub/vue-pdf-flipbook`，并且保留完整安装包中的 `dist/`。`VuePdfFlipbook` 使用具名导入，类型使用 `import type`。不要从包内的 `src/` 或 demo 路径导入。`useZoomPan`、`useFullscreen` 是仓库示例代码，不是 npm 包的公共导出；可以采用本 README 的独立实现。
+
+### 页面空白或出现整页滚动条
+
+检查阅读区父级是否有确定高度、flex/grid 子项是否设置 `min-width: 0; min-height: 0`，以及样式入口是否引入。缩放示例在 100% 时外层隐藏溢出，放大时仅阅读视口开启滚动。PDF 请求失败则根据 `error` 事件检查 URL、CORS 和 HTTP 206 支持。
+
+### 点击放大，书页尺寸没有变化
+
+同时改变缩放内容层的 `width` 和 `height`，保持 `flex: none`，并让组件使用 `height="100%"`。仅改变宽度、倍率变量或调用已移除的 `zoomIn()` 不会按上述容器方案放大。需要“适应页面”时把倍率恢复为 1。
+
+### 自定义缩略图不显示或选中状态不更新
+
+先调用 `showThumbnails()`，完整列表插槽中用 `pdf && visible` 控制挂载；Teleport 的目标必须已存在。选中样式绑定 `item.isActive`，预览 Canvas 绑定 `item.shouldRender`。业务 CSS 必须实际定义边框或背景高亮。仅替换单项时使用 `#thumbnail`，完全控制位置和尺寸时使用 `#thumbnails`。
+
+### 如何指定外部 Worker
+
+默认无需配置。必须使用外部文件时，将与当前包依赖版本完全一致的 `pdf.worker.min.mjs` 部署为可访问的静态资源，然后指定其地址：
+
+```vue
+<VuePdfFlipbook :url="pdfUrl" worker-src="/pdf.worker.min.mjs" />
+```
+
+当前源码依赖 PDF.js 6.2.108，不能配用其他版本的 Worker。部署在子路径时请传入对应子路径下的实际 URL；跨域 Worker 还需要符合业务站点的跨域和 CSP 配置。
+
+### 翻页返回的图片如何显示
+
+监听 `@page-change="onPageChange"`，处理函数的两个参数分别是页码和 `string | null` 图片 URL。将第二个参数保存到 ref 后使用 `<img v-if="preview" :src="preview" style="max-width: 220px; height: auto" />`。这是 PNG Data URL，无需调用 `URL.revokeObjectURL()`；若业务累计保存每页图片，应自行限制缓存数量。
+
 ## 从内置阅读器迁移
 
-已移除 `showToolbar`、`showThumbnails`、`minZoom`、`maxZoom`、`zoomStep`，以及 `zoomIn()`、`zoomOut()`、`resetZoom()`、`toggleFullscreen()` 和 `zoom-change`。请将对应逻辑迁移到业务组件。默认背景改为透明；组件不再附加页码和骨架屏。阅读区现提供左右翻页按钮。
+已移除属性 `showToolbar`、`showThumbnails`、`minZoom`、`maxZoom`、`zoomStep`，以及方法 `zoomIn()`、`zoomOut()`、`resetZoom()`、`toggleFullscreen()` 和事件 `zoom-change`。缩略图仍通过实例方法 `showThumbnails()` / `hideThumbnails()` 控制。请将工具栏、缩放与全屏逻辑迁移到业务组件。默认背景为透明，页码工具栏由业务实现；阅读区提供左右翻页按钮和首次加载遮罩。
 
 ## 开发
 
