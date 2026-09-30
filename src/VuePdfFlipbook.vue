@@ -5,7 +5,7 @@ import PdfCanvasPage from './components/PdfCanvasPage.vue'
 import PdfThumbnails from './components/PdfThumbnails.vue'
 import { usePdfFlipbook } from './composables/usePdfFlipbook'
 import type { FlipbookEvents } from './composables/types'
-import type { PdfFlipbookProps, PdfThumbnailSlotProps, PdfThumbnailsSlotProps } from './types'
+import type { PdfFlipbookProps, PdfPageNavigationSlotProps, PdfThumbnailSlotProps, PdfThumbnailsSlotProps } from './types'
 import { getThumbnailItems } from './thumbnailItems'
 
 /**
@@ -20,6 +20,9 @@ const props = withDefaults(
     height: '100%',
     background: 'transparent',
     workerSrc: '',
+    loadingText: 'PDF 加载中…',
+    showPreviousButton: true,
+    showNextButton: true,
   },
 )
 
@@ -42,6 +45,8 @@ const legacyThumbnailProps: Readonly<{
 const emit = defineEmits<FlipbookEvents>()
 /** thumbnail 是旧版单项插槽；thumbnails 接管整个列表、位置及交互，优先级更高。 */
 const slots = defineSlots<{
+  'previous-button'?: (props: PdfPageNavigationSlotProps) => unknown
+  'next-button'?: (props: PdfPageNavigationSlotProps) => unknown
   thumbnail?: (props: PdfThumbnailSlotProps) => unknown
   thumbnails?: (props: PdfThumbnailsSlotProps) => unknown
 }>()
@@ -83,6 +88,16 @@ const {
   bookRevision, renderPages, thumbnailReadyPages,
   onPageRendered, onPageError, api, thumbnailsVisible, visiblePages, canPrevious, canNext,
 } = usePdfFlipbook(props, emit)
+
+/** 供默认按钮和插槽复用的上一页操作；禁用时忽略调用。 */
+function navigatePrevious() {
+  if (canPrevious.value && !pageLoading.value) api.previous()
+}
+
+/** 供默认按钮和插槽复用的下一页操作；禁用时忽略调用。 */
+function navigateNext() {
+  if (canNext.value && !pageLoading.value) api.next()
+}
 
 /** 根据当前可见页和已渲染页生成整体插槽的数据；翻页后自动更新选中状态。 */
 const thumbnailItems = computed(() => getThumbnailItems(
@@ -129,22 +144,30 @@ defineExpose(api)
             </article>
           </div>
 
-          <button
-            v-if="showPageNavigation && (mode !== 'double' || !visiblePages.includes(1))"
-            type="button" class="vpf-page-nav vpf-page-nav--previous"
-            aria-label="上一页" title="上一页" :disabled="!canPrevious || pageLoading"
-            @click.stop="api.previous()"
+          <slot
+            v-if="showPreviousButton && showPageNavigation && (mode !== 'double' || !visiblePages.includes(1))"
+            name="previous-button" :disabled="!canPrevious || pageLoading" :navigate="navigatePrevious"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
-          </button>
-          <button
-            v-if="showPageNavigation && (mode !== 'double' || !visiblePages.includes(pageCount))"
-            type="button" class="vpf-page-nav vpf-page-nav--next"
-            aria-label="下一页" title="下一页" :disabled="!canNext || pageLoading"
-            @click.stop="api.next()"
+            <button
+              type="button" class="vpf-page-nav vpf-page-nav--previous"
+              aria-label="上一页" title="上一页" :disabled="!canPrevious || pageLoading"
+              @click.stop="navigatePrevious"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+            </button>
+          </slot>
+          <slot
+            v-if="showNextButton && showPageNavigation && (mode !== 'double' || !visiblePages.includes(pageCount))"
+            name="next-button" :disabled="!canNext || pageLoading" :navigate="navigateNext"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
-          </button>
+            <button
+              type="button" class="vpf-page-nav vpf-page-nav--next"
+              aria-label="下一页" title="下一页" :disabled="!canNext || pageLoading"
+              @click.stop="navigateNext"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+            </button>
+          </slot>
           <!-- 未使用自定义插槽或外部目标时，将默认缩略图叠放在阅读区底部。 -->
           <div v-if="thumbnailsVisible && !$slots.thumbnails && !$slots.thumbnail && !legacyThumbnailProps.thumbnailTarget" class="vpf-default-thumbnails">
             <PdfThumbnails
@@ -165,7 +188,7 @@ defineExpose(api)
           </template>
           <template v-else>
             <span class="vpf-initial-loading-spinner" aria-hidden="true" />
-            <p class="vpf-initial-loading-title">PDF 加载中…</p>
+            <p class="vpf-initial-loading-title">{{ loadingText }}</p>
             <p class="vpf-initial-loading-detail">正在准备阅读页面</p>
           </template>
         </div>

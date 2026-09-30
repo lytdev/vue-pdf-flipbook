@@ -53,8 +53,11 @@ const state = ref<PdfFlipbookState>()
 | `height` | `string` / `number` | `100%` | 默认填满父容器高度；数字单位为 px |
 | `background` | `string` | `'transparent'` | 背景色 |
 | `workerSrc` | `string` | 内置 Worker | 自定义 PDF.js Worker URL |
+| `loadingText` | `string` | `'PDF 加载中…'` | 首次加载和重新加载时遮罩中的标题文字，支持动态更新 |
 
 双页模式在空间不足时自动显示单页。`visiblePages` 反映实际显示页，而 `mode` 表示选择的模式。
+
+可通过 `<VuePdfFlipbook :url="pdfUrl" loading-text="文档加载中，请稍候…" />` 自定义加载提示。加载错误仍显示错误标题和具体错误信息，不使用此文案。
 
 双页模式两侧显示纸张层叠边缘，厚度按当前页组之前和之后的页数分配：前半本右厚左薄，后半本左厚右薄，翻页或跳页后平滑变化。每侧最多 16px，短文档按页数减薄，单页模式隐藏。布局在双页状态下每侧预留 18px，防止页叠被裁切；封面及封底的页叠随闭合位置移动。
 
@@ -76,6 +79,25 @@ const state = ref<PdfFlipbookState>()
 
 鼠标移入阅读区时，左侧显示“上一页”、右侧显示“下一页”按钮。双页模式首页只显示“下一页”，显示最后一页的页面组只显示“上一页”；封面打开或合上的动画过程中同时隐藏两个按钮，动画结束后再按当前页面恢复，避免按钮先于书本开合换位。单页模式在首尾保留对应禁用按钮。按钮复用现有翻页与预加载流程，目标页加载期间禁用相应操作。键盘聚焦时也会显示按钮；无悬停能力的触屏设备上保持显示。缩略图列表不占用按钮的定位区域。
 
+调用方可设置 `:show-previous-button="false"` 或 `:show-next-button="false"` 分别隐藏内置按钮，两者默认均为 `true`，属性变化会立即更新显示。隐藏按钮只影响界面；`previous()`、`next()`、缩略图和翻页手势仍可使用。上述首页、末页及动画期间的隐藏规则继续生效。
+
+使用 `#previous-button` 和 `#next-button` 可分别替换整个按钮。插槽提供 `disabled` 和 `navigate()`；外部按钮应绑定禁用状态，并在点击时调用 `navigate()`。插槽仍受对应的 `showPreviousButton` / `showNextButton` 属性及首尾页、封面动画期间的显示规则控制。外部负责按钮的布局与样式；可以沿用默认的 `vpf-page-nav`、`vpf-page-nav--previous` / `vpf-page-nav--next` 类，也可以使用自己的类。
+
+```vue
+<VuePdfFlipbook :url="pdfUrl">
+  <template #previous-button="{ disabled, navigate }">
+    <button type="button" class="vpf-page-nav vpf-page-nav--previous" :disabled="disabled" @click.stop="navigate">
+      返回
+    </button>
+  </template>
+  <template #next-button="{ disabled, navigate }">
+    <button type="button" class="vpf-page-nav vpf-page-nav--next" :disabled="disabled" @click.stop="navigate">
+      继续
+    </button>
+  </template>
+</VuePdfFlipbook>
+```
+
 ## 事件
 
 | 事件 | 参数 | 说明 |
@@ -83,11 +105,27 @@ const state = ref<PdfFlipbookState>()
 | `loaded` | `{ pages: number }` | 文档加载与翻页引擎初始化完成，页面 Canvas 可能仍在渲染 |
 | `error` | `unknown` | 加载或页面渲染错误，外部负责提示 |
 | `progress` | `number` | 下载百分比，服务端未提供总长度时可能为 0 |
-| `page-change` | `number` | 当前页码变化 |
+| `page-change` | `(page: number, thumbnailUrl: string \| null)` | 当前页码及该页的 PNG Data URL 缩略图；生成失败时图片为 `null` |
 | `mode-change` | `ReaderMode` | 调用 `setMode` 改变模式 |
 | `state-change` | `PdfFlipbookState` | 加载、页码、布局等状态变化 |
 
 `PdfFlipbookState` 包含 `page`、`pages`、`mode`、`visiblePages`、`loading`、`progress`、`error`（文档加载错误文本）、`canPrevious`、`canNext`。状态为快照，修改它不会修改组件。
+
+`page-change` 保持首个参数为页码，已有只接收页码的监听器无需修改。第二个参数可直接绑定到 `<img :src="thumbnailUrl">`；组件从已渲染的正文 Canvas 等比缩小为 PNG Data URL，竖向页的宽高上限为 160 × 220 像素，横向页为 220 × 160 像素，不会拉伸原始比例。生成过程不依赖缩略图列表是否显示，也适用于自定义缩略图插槽。首次加载时会等当前页 Canvas 绘制完成后再发送此事件；`loaded` 仍在文档和翻页引擎初始化后立即发送。双栏模式的页码和图片均对应当前页组的左页。
+
+```vue
+<VuePdfFlipbook :url="pdfUrl" @page-change="onPageChange" />
+```
+
+```ts
+import { ref } from 'vue'
+
+const preview = ref<string | null>(null)
+function onPageChange(page: number, thumbnailUrl: string | null) {
+  console.log('当前页码', page)
+  preview.value = thumbnailUrl
+}
+```
 
 另外，`pageLoading` 表示跳页前正在下载或渲染目标及动画必需页面，`targetPage` 表示目标页码（准备及动画期间有效，空闲时为 `null`）。外部可监听 `state-change` 展示 `正在加载第 {{ state.targetPage }} 页`。它与首次打开文档的 `loading` 独立；页面准备完成后、动画开始前自动结束，失败、切换模式、重新加载或取消跳页时也会清除。已准备好的页面不会显示加载状态。demo 在阅读区显示遮罩和转圈提示，等待期间仍可通过进度条选择其他目标页。
 

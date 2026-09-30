@@ -12,7 +12,8 @@ export type ResolvedFlipbookProps = Readonly<PdfFlipbookProps & Required<Pick<
 export type FlipbookEvents = {
   loaded: [payload: { pages: number }]
   error: [error: unknown]
-  'page-change': [page: number]
+  /** page 为当前一基页码；thumbnailUrl 为该页缩小后的 PNG Data URL，无法生成时为 null。 */
+  'page-change': [page: number, thumbnailUrl: string | null]
   'mode-change': [mode: ReaderMode]
   'state-change': [state: PdfFlipbookState]
   progress: [progress: number]

@@ -73,7 +73,13 @@ try {
   const libraryModule = await import(pathToFileURL(path.join(installed, packed.main)).href)
   const { createSSRApp } = await import('vue')
   const { renderToString } = await import('@vue/server-renderer')
-  assert.ok((await renderToString(createSSRApp(libraryModule.VuePdfFlipbook, { url: 'https://example.com/book.pdf' }))).includes('vpf-'))
+  const initialHtml = await renderToString(createSSRApp(libraryModule.VuePdfFlipbook, { url: 'https://example.com/book.pdf' }))
+  assert.ok(initialHtml.includes('vpf-'))
+  assert.ok(initialHtml.includes('PDF 加载中…'), 'The loading title must retain its default text')
+  const customLoadingHtml = await renderToString(createSSRApp(libraryModule.VuePdfFlipbook, {
+    url: 'https://example.com/book.pdf', loadingText: '文档加载中…',
+  }))
+  assert.ok(customLoadingHtml.includes('文档加载中…'), 'The caller must be able to replace the loading title')
   for (const entry of [packed.main, packed.module, packed.types, ...Object.values(packed.exports['.']), packed.exports['./style.css']]) {
     await access(path.join(installed, entry))
   }
@@ -84,16 +90,20 @@ try {
   await writeFile(entry, `
 import { ref } from 'vue'
 import plugin, { VuePdfFlipbook, PdfCanvasPage } from '${packed.name}'
-import type { PdfFlipbookExpose, PdfFlipbookProps, PdfFlipbookState, PdfThumbnailSlotProps, PdfThumbnailsSlotProps } from '${packed.name}'
+import type { PdfFlipbookExpose, PdfFlipbookProps, PdfFlipbookState, PdfPageNavigationSlotProps, PdfThumbnailSlotProps, PdfThumbnailsSlotProps } from '${packed.name}'
 import '${packed.name}/style.css'
 const reader = ref<PdfFlipbookExpose>()
 const state = ref<PdfFlipbookState>()
-const props: PdfFlipbookProps = { url: 'https://example.com/book.pdf', workerSrc: '/pdf.worker.mjs', initialMode: 'double' }
+const props: PdfFlipbookProps = {
+  url: 'https://example.com/book.pdf', workerSrc: '/pdf.worker.mjs', initialMode: 'double',
+  showPreviousButton: false, showNextButton: false, loadingText: '文档加载中…',
+}
 const thumbnail = {} as PdfThumbnailSlotProps
 const thumbnails = {} as PdfThumbnailsSlotProps
+const navigation: PdfPageNavigationSlotProps = { disabled: false, navigate: () => reader.value?.next() }
 state.value = reader.value?.getState()
 reader.value?.goToPage(1)
-export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail, thumbnails }
+export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail, thumbnails, navigation }
 `)
   const program = ts.createProgram([entry], {
     noEmit: true,

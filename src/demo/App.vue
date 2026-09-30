@@ -18,6 +18,10 @@ const url = ref(demoDocument.url);
 const activeUrl = ref(url.value);
 const state = ref<PdfFlipbookState>();
 const readerError = ref("");
+const currentPageThumbnail = ref<string | null>(null);
+const currentPageThumbnailPage = ref(0);
+const showPreviousButton = ref(true);
+const showNextButton = ref(true);
 const { scrollContainer, zoom, dragging, startPan, movePan, endPan, stopPan } =
   useZoomPan();
 const { error: fullscreenError, toggle: fullscreen } = useFullscreen(container);
@@ -37,7 +41,14 @@ function updateState(value: PdfFlipbookState) {
   if (value.loading) {
     stopPan();
     pdf.value = undefined;
+    currentPageThumbnail.value = null;
   }
+}
+
+/** page-change 的第二个参数是当前页的可显示 PNG Data URL。 */
+function onPageChange(page: number, thumbnailUrl: string | null) {
+  currentPageThumbnailPage.value = page;
+  currentPageThumbnail.value = thumbnailUrl;
 }
 
 /**
@@ -88,6 +99,7 @@ function onKeydown(event: KeyboardEvent) {
         上一页
       </button>
       <span>{{ state?.page ?? 1 }} / {{ state?.pages ?? 0 }}</span>
+      <img v-if="currentPageThumbnail" class="demo-current-thumbnail" :src="currentPageThumbnail" :alt="`第 ${currentPageThumbnailPage} 页缩略图`" />
       <button :disabled="!state?.canNext" @click="reader?.next()">
         下一页
       </button>
@@ -124,6 +136,12 @@ function onKeydown(event: KeyboardEvent) {
         缩略图
       </button>
       <button @click="fullscreen">全屏</button>
+      <button :aria-pressed="showPreviousButton" @click="showPreviousButton = !showPreviousButton">
+        内置上一页：{{ showPreviousButton ? "显示" : "隐藏" }}
+      </button>
+      <button :aria-pressed="showNextButton" @click="showNextButton = !showNextButton">
+        内置下一页：{{ showNextButton ? "显示" : "隐藏" }}
+      </button>
     </div>
     <p v-if="state?.loading" role="status">正在加载 {{ state.progress }}%</p>
     <p v-if="state?.error || readerError" role="alert">
@@ -146,12 +164,26 @@ function onKeydown(event: KeyboardEvent) {
             <VuePdfFlipbook
               ref="reader"
               :url="activeUrl"
+              :show-previous-button="showPreviousButton"
+              :show-next-button="showNextButton"
+              loading-text="示例 课件 加载中…"
               height="100%"
               @state-change="updateState"
+              @page-change="onPageChange"
               @loaded="pdf = reader?.getDocument()"
               @error="onReaderError"
             >
-              <template #thumbnails="{ pdf, items, visible, select, reportError, pageAspectRatio }">
+              <template #previous-button="{ disabled, navigate }">
+                <div  class="vpf-page-nav vpf-page-nav--previous" style="background: none;" :disabled="disabled" @click.stop="navigate" >
+                  <svg t="1790695556296" class="icon" viewBox="0 0 1024 1024" style="width: 40px;height: 40px;" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7270" width="200" height="200"><path d="M511.936 61.568a448 448 0 0 0-447.552 447.552 448 448 0 0 0 447.552 447.552 448 448 0 0 0 447.552-447.552A448 448 0 0 0 511.936 61.568z m0 831.104a384 384 0 0 1-383.552-383.552 384 384 0 0 1 383.552-383.552 384 384 0 0 1 383.552 383.552 383.936 383.936 0 0 1-383.552 383.552z" p-id="7271" fill="#8a8a8a"></path><path d="M637.76 278.784a31.872 31.872 0 0 0-44.992-0.32L385.6 485.632a30.912 30.912 0 0 0-8.96 23.424 31.36 31.36 0 0 0 8.96 23.616l207.168 207.168c12.224 12.352 32.384 12.224 44.864-0.256s12.608-32.64 0.384-44.992L452.608 509.184l185.344-185.408a31.744 31.744 0 0 0-0.192-44.992z" p-id="7272" fill="#8a8a8a"></path></svg>
+                </div>
+              </template>
+              <template #next-button="{ disabled, navigate }">
+                <div  class="vpf-page-nav vpf-page-nav--next" style="background: none;" :disabled="disabled" @click.stop="navigate" >
+                  <svg t="1790695606742" class="icon" viewBox="0 0 1024 1024" style="width: 40px;height: 40px;" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7538" width="200" height="200"><path d="M511.936 61.568a448 448 0 0 0-447.552 447.552 448 448 0 0 0 447.552 447.552 448 448 0 0 0 447.552-447.552A448 448 0 0 0 511.936 61.568z m0 831.104a384 384 0 0 1-383.552-383.552 384 384 0 0 1 383.552-383.552 384 384 0 0 1 383.552 383.552 383.936 383.936 0 0 1-383.552 383.552z" p-id="7539" fill="#8a8a8a"></path><path d="M386.112 278.784a31.872 31.872 0 0 1 44.992-0.32l207.104 207.168c6.464 6.4 9.28 14.912 8.96 23.424a30.912 30.912 0 0 1-8.96 23.616L431.04 739.84c-12.224 12.352-32.384 12.224-44.864-0.256s-12.608-32.64-0.384-44.992l185.408-185.408-185.344-185.472a31.744 31.744 0 0 1 0.256-44.928z" p-id="7540" fill="#8a8a8a"></path></svg>
+                </div>
+              </template>
+               <template #thumbnails="{ pdf, items, visible, select, reportError, pageAspectRatio }">
                 <Teleport v-if="pdf && visible" to="#demo-thumbnail-sidebar">
                   <nav class="custom-thumbnails" aria-label="PDF 缩略图">
                     <div
@@ -199,6 +231,7 @@ function onKeydown(event: KeyboardEvent) {
     </div>
 </template>
 <style scoped>
+.demo-current-thumbnail { max-width: 32px; max-height: 42px; object-fit: contain; }
 .custom-thumbnail[aria-current='page'] { border-color: #987044; }
 .custom-thumbnail[aria-current='page'] .page-num {
   color: #735126;

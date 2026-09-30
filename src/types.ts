@@ -3,6 +3,14 @@ import type { CSSProperties } from 'vue'
 
 export type ReaderMode = 'single' | 'double'
 
+/** 上一页、下一页按钮插槽参数；调用方可自行渲染并布局整个按钮。 */
+export interface PdfPageNavigationSlotProps {
+  /** 当前是否禁止翻页；包括首尾页和目标页准备期间。 */
+  disabled: boolean
+  /** 请求对应方向翻页；禁用时调用不会执行。 */
+  navigate: () => void
+}
+
 export interface PdfThumbnailSlotProps {
   page: number
   pdf: PDFDocumentProxy
@@ -59,6 +67,12 @@ export interface PdfFlipbookProps {
   background?: string
   /** 外部 PDF.js Worker 地址；留空用内置 Worker，外部文件须与本包 PDF.js 版本完全一致。 */
   workerSrc?: string
+  /** 首次加载及重新加载时的遮罩标题；默认“PDF 加载中…”，可响应式更新。 */
+  loadingText?: string
+  /** 是否显示阅读区内置的“上一页”按钮，默认 true；不影响 previous() 和原生翻页手势。 */
+  showPreviousButton?: boolean
+  /** 是否显示阅读区内置的“下一页”按钮，默认 true；不影响 next() 和原生翻页手势。 */
+  showNextButton?: boolean
   /** @deprecated 旧版缩略图挂载目标，选择器须能找到已存在的容器；新代码请使用 thumbnails 插槽与 Vue Teleport。 */
   thumbnailTarget?: string | HTMLElement
   /** @deprecated 旧版列表布局；新代码请在 thumbnails 插槽内自行使用 CSS 布局。 */
