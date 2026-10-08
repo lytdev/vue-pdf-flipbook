@@ -1,7 +1,7 @@
 import type { App, Plugin } from 'vue'
 import VuePdfFlipbook from './VuePdfFlipbook.vue'
 
-export type { PdfFlipbookExpose, PdfFlipbookProps, PdfFlipbookState, PdfPageNavigationSlotProps, PdfThumbnailSlotProps, PdfThumbnailsSlotProps, PdfThumbnailItem, ReaderMode } from './types'
+export type { PdfFlipAnimation, PdfFlipbookExpose, PdfFlipbookProps, PdfFlipbookState, PdfPageNavigationSlotProps, PdfThumbnailSlotProps, PdfThumbnailsSlotProps, PdfThumbnailItem, ReaderMode } from './types'
 export { VuePdfFlipbook }
 export { default as PdfCanvasPage } from './components/PdfCanvasPage.vue'
 

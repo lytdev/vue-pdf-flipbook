@@ -17,6 +17,8 @@ interface EngineEvents {
    */
   canStartUserTurn: (forward: boolean, prepare?: boolean) => boolean
   getLayoutMode: () => ReaderMode
+  isAnimationEnabled: () => boolean
+  onInstantUserTurn: (forward: boolean) => void
 }
 
 /**
@@ -32,6 +34,7 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
   let removeInputGuards: (() => void) | undefined
   let engineState = 'read'
   let portrait = true
+  let instantTouch: { x: number; y: number; forward: boolean } | undefined
 
   /**
    * 使用 PDF 比例创建引擎，并注册 Canvas 克隆与输入监听。
@@ -114,6 +117,24 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
      * @returns void；准入由导航层判断，已开始的拖动继续交给引擎处理。
      */
     const guard = (event: MouseEvent | TouchEvent) => {
+      if (!events.isAnimationEnabled()) {
+        // 禁用动画时不让引擎开始折页；书页输入改走导航层以保留预加载和事件同步。
+        event.stopImmediatePropagation()
+        if (event.type === 'mousemove') return
+        const target = event.target
+        if (target instanceof Element && target.closest('a, button, input, select, textarea, [contenteditable]')) return
+        const point = 'changedTouches' in event ? event.changedTouches[0] : event
+        if (!point) return
+        const rect = element.getBoundingClientRect()
+        const forward = point.clientX > rect.left + rect.width * (portrait ? 0.4 : 0.5)
+        if (event.type === 'touchstart') {
+          instantTouch = { x: point.clientX, y: point.clientY, forward }
+          return
+        }
+        events.onInstantUserTurn(forward)
+        if (event.cancelable) event.preventDefault()
+        return
+      }
       // 已获准的折页继续由引擎窗口监听器处理，避免中途拦截导致动画停住。
       if (event.type === 'mousemove' && engineState === 'user_fold') return
       const point = 'changedTouches' in event ? event.changedTouches[0] : event
@@ -128,10 +149,27 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     element.addEventListener('mousedown', guard, true)
     element.addEventListener('touchstart', guard, { capture: true, passive: false })
     element.addEventListener('mousemove', guard, true)
+    const finishInstantTouch = (event: TouchEvent) => {
+      const start = instantTouch
+      instantTouch = undefined
+      if (!start || events.isAnimationEnabled() || event.type === 'touchcancel') return
+      const point = event.changedTouches[0]
+      if (!point) return
+      const dx = point.clientX - start.x
+      const dy = point.clientY - start.y
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) return
+      if (Math.abs(dx) > 8 && Math.abs(dx) < 24) return
+      events.onInstantUserTurn(Math.abs(dx) >= 24 ? dx < 0 : start.forward)
+    }
+    window.addEventListener('touchend', finishInstantTouch, true)
+    window.addEventListener('touchcancel', finishInstantTouch, true)
     removeInputGuards = () => {
       element.removeEventListener('mousedown', guard, true)
       element.removeEventListener('touchstart', guard, true)
       element.removeEventListener('mousemove', guard, true)
+      window.removeEventListener('touchend', finishInstantTouch, true)
+      window.removeEventListener('touchcancel', finishInstantTouch, true)
+      instantTouch = undefined
     }
   }
 
@@ -174,13 +212,22 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     isReady: () => pageFlip !== undefined,
     update,
     /**
-     * 导航准备完成后启动翻页，并按首尾页状态调整动画时长。
+     * 导航准备完成后按实际模式选择动画翻页或直接定位。
      * @param pageIndex 目标页面在 PageFlip 中的零基索引。
      * @param corner 起翻页角，top 为上角，bottom 为下角。
      * @returns void；动画完成状态由引擎事件另行通知导航层。
      */
     flip: (pageIndex: number, corner: 'top' | 'bottom') => {
       if (!pageFlip) return
+      if (!events.isAnimationEnabled()) {
+        events.onStateChange('flipping')
+        try {
+          pageFlip.turnToPage(pageIndex)
+        } finally {
+          events.onStateChange('read')
+        }
+        return
+      }
       const current = pageFlip.getCurrentPageIndex()
       const last = pageFlip.getPageCount() - 1
       // 首尾跳转与封面平移采用相近节奏，保留缓起缓停。

@@ -11,6 +11,7 @@ import { getThumbnailItems } from './thumbnailItems'
 /**
  * 阅读器的公开属性及默认值；具体类型和每项限制见 PdfFlipbookProps。
  * url / fileSize 变化由 usePdfFlipbook 重新加载文档；initialPage / initialMode 仅在加载时生效。
+ * flipAnimation 按实际布局响应式控制翻页动画，未指定的模式保持默认动画。
  * height 默认依赖父容器有确定高度；空 workerSrc 使用与本包 PDF.js 匹配的内置 Worker。
  */
 const props = withDefaults(
@@ -84,7 +85,7 @@ watch(() => legacyThumbnailProps.thumbnailTarget, async () => {
 const {
   viewport, bookStage, pageAspectRatio, flipbookElement, rootHeight, bookShellStyle, coverClass,
   showPageNavigation, pageEdgesStyle, hideDefaultThumbnails,
-  pdf, pageLoading, initialViewReady, initialLoadError, mode, pageCount,
+  pdf, pageLoading, initialViewReady, initialLoadError, mode, animationEnabled, pageCount,
   bookRevision, renderPages, thumbnailReadyPages,
   onPageRendered, onPageError, api, thumbnailsVisible, visiblePages, canPrevious, canNext,
 } = usePdfFlipbook(props, emit)
@@ -117,6 +118,7 @@ defineExpose(api)
 <template>
   <div
     class="vpf-reader"
+    :class="{ 'vpf-reader--instant-turn': !animationEnabled }"
     :style="{ '--vpf-height': rootHeight, '--vpf-background': background }"
     :aria-busy="(!initialViewReady && !initialLoadError) || pageLoading"
     role="region"

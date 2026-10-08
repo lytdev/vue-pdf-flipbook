@@ -215,6 +215,10 @@
 .vpf-book-shell--cover-turning .stf__wrapper::before,
 .vpf-flipbook .stf__wrapper.--landscape .vpf-turn-page[data-page='1']::after,
 .vpf-book-shell--back-cover .vpf-turn-page::after { display: none; }
+.vpf-reader--instant-turn .vpf-default-thumbnails,
+.vpf-reader--instant-turn .vpf-page-edges,
+.vpf-reader--instant-turn .vpf-flipbook,
+.vpf-reader--instant-turn .vpf-page-edge { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .vpf-default-thumbnails { transition: none; }
   .vpf-page-edges { transition: none; }

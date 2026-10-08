@@ -3,6 +3,12 @@ import type { CSSProperties } from 'vue'
 
 export type ReaderMode = 'single' | 'double'
 
+/** 分别控制实际单栏、双栏布局的翻页动画；未指定的模式默认播放动画。 */
+export interface PdfFlipAnimation {
+  single?: boolean
+  double?: boolean
+}
+
 /** 上一页、下一页按钮插槽参数；调用方可自行渲染并布局整个按钮。 */
 export interface PdfPageNavigationSlotProps {
   /** 当前是否禁止翻页；包括首尾页和目标页准备期间。 */
@@ -61,6 +67,8 @@ export interface PdfFlipbookProps {
   initialPage?: number
   /** 加载时的阅读模式；未指定则按首页比例选择横向单栏、纵向双栏。后续切换使用 setMode。 */
   initialMode?: ReaderMode
+  /** 按实际布局分别开关翻页动画；关闭后按钮、跳页及书页点击会直接定位，默认两种模式均播放。 */
+  flipAnimation?: PdfFlipAnimation
   /** 阅读区域高度；默认填满父容器，父容器须有确定高度；数值按像素处理。 */
   height?: string | number
   /** 阅读区域背景色，默认透明；不改变 PDF 页面本身的颜色。 */

@@ -86,7 +86,7 @@ declare module 'page-flip' {
      */
     flip(page: number, corner?: 'top' | 'bottom'): void
     /**
-     * 不播放动画，直接定位到目标页；当前组件导航不使用此接口。
+     * 不播放动画，直接定位到目标页；关闭对应模式动画时由组件导航调用。
      * @param page PageFlip 使用的零基目标页索引。
      * @returns void。
      */

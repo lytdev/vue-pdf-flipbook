@@ -1,5 +1,6 @@
 import { computed, nextTick, onMounted, onScopeDispose, ref, watch } from 'vue'
 import type { PdfFlipbookExpose, PdfFlipbookState, ReaderMode } from '../types'
+import { isFlipAnimationEnabled } from './types'
 import type { FlipbookEmit, ResolvedFlipbookProps } from './types'
 import { usePdfDocument } from './usePdfDocument'
 import { usePageFlip } from './usePageFlip'
@@ -24,6 +25,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   const bookRevision = ref(0)
   const thumbnailsVisible = ref(false)
   const turnState = ref('read')
+  const animationEnabled = computed(() => isFlipAnimationEnabled(props.flipAnimation, layout.orientation.value))
   const initialViewReady = ref(false)
   const engineInitialized = ref(false)
   const initialRenderError = ref('')
@@ -160,12 +162,15 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   // 通过回调连接引擎与导航，第三方事件和实例不直接暴露给使用方。
   const engine = usePageFlip(flipbookElement, {
     getLayoutMode: () => layout.orientation.value,
+    isAnimationEnabled: () => animationEnabled.value,
+    onInstantUserTurn: (forward) => { if (forward) navigation.next(); else navigation.previous() },
     onFlip: (index) => navigation.syncCurrentPage(index),
     onStateChange: (state) => {
       const wasTurning = ['flipping', 'user_fold'].includes(turnState.value)
       if (state !== 'read') finishCoverReturn()
       if (state === 'read' && wasTurning && navigation.currentPage.value === 1
-        && document.pageCount.value > 1 && layout.orientation.value === 'double') {
+        && document.pageCount.value > 1 && layout.orientation.value === 'double'
+        && animationEnabled.value) {
         void waitForCoverReturn()
       }
       turnState.value = state
@@ -243,7 +248,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
   })
   // 双页开合期间隐藏两侧按钮，避免页码已更新但纸张动画尚未结束时按钮提前换位。
   const showPageNavigation = computed(() => layout.orientation.value !== 'double'
-    || (!['flipping', 'user_fold'].includes(turnState.value) && !coverReturning.value))
+    || (!['flipping', 'user_fold'].includes(turnState.value) && (!animationEnabled.value || !coverReturning.value)))
   // 依据本次实际目标页组，而非当前页码，决定是否在封面开合时隐去默认缩略图。
   const hideDefaultThumbnails = computed(() => shouldHideDefaultThumbnails(
     navigation.currentPage.value, navigation.turnTarget.value,
@@ -322,7 +327,7 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     bookShellStyle: layout.bookShellStyle, coverClass, showPageNavigation, pageEdgesStyle,
     hideDefaultThumbnails,
     pdf: document.pdf, loading: document.loading, pageCount: document.pageCount,
-    initialViewReady, initialLoadError,
+    initialViewReady, initialLoadError, animationEnabled,
     pageLoading: navigation.pageLoading, mode: navigation.mode, activePages: navigation.activePages,
     renderPages: navigation.renderPages, thumbnailReadyPages: navigation.thumbnailReadyPages,
     onPageRendered, onPageError,

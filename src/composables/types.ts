@@ -1,4 +1,4 @@
-import type { PdfFlipbookProps, PdfFlipbookState, ReaderMode } from '../types'
+import type { PdfFlipAnimation, PdfFlipbookProps, PdfFlipbookState, ReaderMode } from '../types'
 
 export interface PageSize {
   width: number
@@ -37,5 +37,10 @@ export interface FlipEnginePort {
    * @returns void；动画状态通过引擎事件另行同步。
    */
   flip: (pageIndex: number, corner: 'top' | 'bottom') => void
+}
+
+/** 根据实际显示方向确定是否播放翻页动画；属性变化会在下次交互时立即生效。 */
+export function isFlipAnimationEnabled(animation: PdfFlipAnimation | undefined, mode: ReaderMode): boolean {
+  return animation?.[mode] !== false
 }
 

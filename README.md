@@ -282,6 +282,7 @@ onBeforeUnmount(stopPan)
 | `fileSize` | `number` | 自动读取 `Content-Range` | PDF 原始字节数；跨域响应未暴露 `Content-Range` 时必须由文件元数据接口提供，变化时重新加载 |
 | `initialPage` | `number` | `1` | 每次加载文档的初始页码，从 1 开始 |
 | `initialMode` | `'single'` / `'double'` | 根据 PDF 首页比例选择 | 横向页面默认单栏，纵向页面默认双栏；显式传入时优先使用指定模式，后续可用 `setMode()` 切换 |
+| `flipAnimation` | `{ single?: boolean; double?: boolean }` | 两种模式均开启 | 按实际单栏、双栏布局分别控制翻页动画；关闭时翻页直接定位，属性变化无需重新加载 PDF |
 | `height` | `string` / `number` | `100%` | 默认填满父容器高度；数字单位为 px |
 | `background` | `string` | `'transparent'` | 背景色 |
 | `workerSrc` | `string` | 内置 Worker | 自定义 PDF.js Worker URL |
@@ -290,6 +291,14 @@ onBeforeUnmount(stopPan)
 | `showNextButton` | `boolean` | `true` | 显示下一页按钮或其自定义插槽，仍遵守首尾页和动画显示规则 |
 
 双页模式在空间不足时自动显示单页。`visiblePages` 反映实际显示页，而 `mode` 表示选择的模式。
+
+例如单栏直接切页、双栏保留翻书动画：
+
+```vue
+<VuePdfFlipbook :url="pdfUrl" :flip-animation="{ single: false, double: true }" />
+```
+
+两项都不传时均播放动画；可只传其中一项。按钮、缩略图、`goToPage()` 以及书页鼠标操作使用实际布局对应的设置，关闭动画后仍会等待目标页渲染完成并发送原有页码事件。窄屏下双栏会退化为单栏，此时采用 `single` 的设置。
 
 可通过 `<VuePdfFlipbook :url="pdfUrl" loading-text="文档加载中，请稍候…" />` 自定义加载提示。加载错误仍显示错误标题和具体错误信息，不使用此文案。
 
