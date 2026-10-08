@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import type { CSSProperties } from 'vue'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { PdfThumbnailSlotProps } from '../types'
 import { getThumbnailPreviewPages } from '../thumbnailItems'
@@ -13,9 +12,6 @@ const props = defineProps<{
   readyPages: ReadonlySet<number>
   compact?: boolean
   pageAspectRatio?: number
-  layout?: 'horizontal' | 'grid'
-  columns?: number
-  itemStyle?: CSSProperties | ((page: number) => CSSProperties)
 }>()
 const emit = defineEmits<{ select: [page: number]; error: [error: unknown] }>()
 const slots = defineSlots<{ thumbnail?: (props: PdfThumbnailSlotProps) => unknown }>()
@@ -114,7 +110,7 @@ function guardDragClick(event: MouseEvent) {
 }
 
 /**
- * 让旧版自定义单项插槽的外层 div 支持回车和空格选页。
+ * 让自定义单项插槽的外层 div 支持回车和空格选页。
  * @param event 缩略图单项上的 keydown 事件。
  * @param page 对应的一基页码，传给 select 事件。
  */
@@ -128,21 +124,6 @@ function onThumbnailKeydown(event: KeyboardEvent, page: number) {
 const previewPages = computed(() => getThumbnailPreviewPages(
   props.visiblePages, props.pages, props.readyPages,
 ))
-const gridColumns = computed(() => {
-  if (props.layout === 'horizontal') return undefined
-  const columns = Number.isInteger(props.columns) && (props.columns ?? 0) > 0
-    ? props.columns : undefined
-  return props.layout === 'grid' ? columns ?? 2 : columns
-})
-
-/**
- * 取得旧版单项的样式，支持固定对象或按页码生成的函数。
- * @param page 当前缩略图的一基页码。
- * @returns 此页的 CSSProperties；未配置时为 undefined。
- */
-function getItemStyle(page: number): CSSProperties | undefined {
-  return typeof props.itemStyle === 'function' ? props.itemStyle(page) : props.itemStyle
-}
 
 /**
  * 将当前页按钮居中到缩略图横向可视区域。
@@ -157,13 +138,8 @@ function centerCurrentPage() {
   const rect = element.getBoundingClientRect()
   const currentRect = current.getBoundingClientRect()
   // 当前按钮左偏移减去居中所需留白，计算列表自身需要移动的距离。
-  if (gridColumns.value) {
-    element.scrollTop += currentRect.top - rect.top - element.clientTop
-      - (element.clientHeight - currentRect.height) / 2
-  } else {
-    element.scrollLeft += currentRect.left - rect.left - element.clientLeft
-      - (element.clientWidth - currentRect.width) / 2
-  }
+  element.scrollLeft += currentRect.left - rect.left - element.clientLeft
+    - (element.clientWidth - currentRect.width) / 2
 }
 
 watch(() => props.visiblePages, async () => {
@@ -190,10 +166,8 @@ onBeforeUnmount(() => {
     ref="container" class="vpf-thumbnails"
     :class="{
       'vpf-thumbnails--compact': compact,
-      'vpf-thumbnails--grid': !!gridColumns,
       'vpf-thumbnails--dragging': dragging,
     }"
-    :style="gridColumns ? { '--vpf-thumbnail-columns': gridColumns } : undefined"
     aria-label="PDF 缩略图"
     @mousedown="startDrag"
     @mousemove="guardThumbnailMove"
@@ -210,7 +184,6 @@ onBeforeUnmount(() => {
       :type="slots.thumbnail ? undefined : 'button'"
       class="vpf-thumbnail"
       :class="{ 'vpf-thumbnail--custom': !!slots.thumbnail }"
-      :style="getItemStyle(page)"
       :data-page="page"
       :role="slots.thumbnail ? 'button' : undefined"
       :tabindex="slots.thumbnail ? 0 : undefined"

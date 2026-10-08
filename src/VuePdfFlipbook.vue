@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, shallowRef, watch } from 'vue'
-import type { CSSProperties } from 'vue'
+import { computed } from 'vue'
 import PdfCanvasPage from './components/PdfCanvasPage.vue'
 import PdfThumbnails from './components/PdfThumbnails.vue'
 import { usePdfFlipbook } from './composables/usePdfFlipbook'
@@ -27,57 +26,15 @@ const props = withDefaults(
   },
 )
 
-/**
- * 保留旧缩略图配置的响应式读取通道，不移除公开 API 的废弃提示。
- * 新项目应使用 thumbnails 整体插槽；该插槽存在时以下布局配置不会参与渲染。
- */
-const legacyThumbnailProps: Readonly<{
-  /** 旧版外部挂载目标，选择器需在组件挂载时指向已存在的 HTMLElement。 */
-  thumbnailTarget?: string | HTMLElement
-  /** 旧版列表排列方式；整体插槽自行控制布局。 */
-  thumbnailLayout?: 'horizontal' | 'grid'
-  /** 旧版网格列数，仅在 grid 布局中使用。 */
-  thumbnailColumns?: number
-  /** 旧版单项样式或按页码生成样式的函数。 */
-  thumbnailItemStyle?: CSSProperties | ((page: number) => CSSProperties)
-}> = props
-
 /** 下层通过此函数向外发送加载、翻页、模式和状态事件；事件签名由 FlipbookEvents 约束。 */
 const emit = defineEmits<FlipbookEvents>()
-/** thumbnail 是旧版单项插槽；thumbnails 接管整个列表、位置及交互，优先级更高。 */
-const slots = defineSlots<{
+/** thumbnail 替换单项内容；thumbnails 接管整个列表、位置及交互，优先级更高。 */
+defineSlots<{
   'previous-button'?: (props: PdfPageNavigationSlotProps) => unknown
   'next-button'?: (props: PdfPageNavigationSlotProps) => unknown
   thumbnail?: (props: PdfThumbnailSlotProps) => unknown
   thumbnails?: (props: PdfThumbnailsSlotProps) => unknown
 }>()
-/** 旧版 thumbnailTarget 解析出的真实节点，交给下方 Teleport 挂载缩略图。 */
-const thumbnailHost = shallowRef<HTMLElement>()
-
-/**
- * 将旧版缩略图目标解析为节点；有整体列表插槽时由调用方自行决定挂载位置。
- * 调用逻辑：组件挂载及 thumbnailTarget 变化后调用。
- * 注意：选择器未命中时保持 undefined，外部容器需要在解析前存在。
- * @returns void。
- */
-function resolveThumbnailHost() {
-  if (slots.thumbnails) return
-  try {
-    thumbnailHost.value = typeof legacyThumbnailProps.thumbnailTarget === 'string'
-      ? document.querySelector<HTMLElement>(legacyThumbnailProps.thumbnailTarget) ?? undefined
-      : legacyThumbnailProps.thumbnailTarget
-  } catch (error) {
-    thumbnailHost.value = undefined
-    emit('error', error)
-  }
-}
-
-onMounted(resolveThumbnailHost)
-// 等父组件完成目标节点更新后再解析，避免 Teleport 指向已替换的旧节点。
-watch(() => legacyThumbnailProps.thumbnailTarget, async () => {
-  await nextTick()
-  resolveThumbnailHost()
-})
 /**
  * 外观层统一管理 PDF 加载、页面 Canvas、布局和翻页引擎。
  * 这里仅连接模板事件与状态；对外方法由 api 经 defineExpose 暴露。
@@ -170,12 +127,12 @@ defineExpose(api)
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
             </button>
           </slot>
-          <!-- 未使用自定义插槽或外部目标时，将默认缩略图叠放在阅读区底部。 -->
-          <div v-if="thumbnailsVisible && !$slots.thumbnails && !$slots.thumbnail && !legacyThumbnailProps.thumbnailTarget" class="vpf-default-thumbnails">
+          <!-- 未使用自定义插槽时，将默认缩略图叠放在阅读区底部。 -->
+          <div v-if="thumbnailsVisible && !$slots.thumbnails && !$slots.thumbnail" class="vpf-default-thumbnails">
             <PdfThumbnails
               :key="bookRevision" :pdf="pdf" :pages="pageCount" :visible-pages="visiblePages"
               :ready-pages="thumbnailReadyPages"
-              :page-aspect-ratio="pageAspectRatio" :item-style="legacyThumbnailProps.thumbnailItemStyle" compact
+              :page-aspect-ratio="pageAspectRatio" compact
               @select="api.goToPage" @error="emit('error', $event)"
             />
           </div>
@@ -206,21 +163,20 @@ defineExpose(api)
         />
       </template>
     </template>
-    <!-- 无整体插槽时沿用旧版单项插槽和 thumbnailTarget，维持已有调用兼容。 -->
-    <Teleport v-else :to="thumbnailHost || 'body'" :disabled="!legacyThumbnailProps.thumbnailTarget">
+    <!-- 单项插槽保留内置列表与跳页交互；自定义挂载位置使用上方整体插槽。 -->
+    <template v-else-if="$slots.thumbnail">
       <PdfThumbnails
-        v-if="thumbnailsVisible && pdf && ($slots.thumbnail || legacyThumbnailProps.thumbnailTarget) && (!legacyThumbnailProps.thumbnailTarget || thumbnailHost)"
+        v-if="thumbnailsVisible && pdf"
         :key="bookRevision"
         :pdf="pdf" :pages="pageCount" :visible-pages="visiblePages"
-        :ready-pages="thumbnailReadyPages" :layout="legacyThumbnailProps.thumbnailLayout" :columns="legacyThumbnailProps.thumbnailColumns"
-        :item-style="legacyThumbnailProps.thumbnailItemStyle"
+        :ready-pages="thumbnailReadyPages"
         @select="api.goToPage" @error="emit('error', $event)"
       >
-        <template v-if="$slots.thumbnail" #thumbnail="slotProps">
+        <template #thumbnail="slotProps">
           <slot name="thumbnail" v-bind="slotProps" />
         </template>
       </PdfThumbnails>
-    </Teleport>
+    </template>
   </div>
 </template>
 

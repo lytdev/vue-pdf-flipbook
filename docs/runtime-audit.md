@@ -76,6 +76,8 @@
 
 ### P3：旧缩略图挂载目标的非法选择器没有捕获
 
+> 后续状态：新版已移除 `thumbnailTarget` 等废弃配置及选择器解析逻辑，此历史风险不再适用。自定义挂载位置由 `thumbnails` 插槽内的 Vue Teleport 实现。
+
 - 位置：`src/VuePdfFlipbook.vue:60`。
 - thumbnailTarget 传入 `[` 等非法 CSS selector 时，querySelector 会抛 SyntaxError，未统一转换为组件 error 事件。找不到元素已有处理，但非法语法不同于找不到元素。
 - 建议：捕获选择器解析错误并给出可定位信息，保持遗留属性兼容。

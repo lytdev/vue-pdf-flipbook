@@ -1,5 +1,4 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import type { CSSProperties } from 'vue'
 
 export type ReaderMode = 'single' | 'double'
 
@@ -81,14 +80,6 @@ export interface PdfFlipbookProps {
   showPreviousButton?: boolean
   /** 是否显示阅读区内置的“下一页”按钮，默认 true；不影响 next() 和原生翻页手势。 */
   showNextButton?: boolean
-  /** @deprecated 旧版缩略图挂载目标，选择器须能找到已存在的容器；新代码请使用 thumbnails 插槽与 Vue Teleport。 */
-  thumbnailTarget?: string | HTMLElement
-  /** @deprecated 旧版列表布局；新代码请在 thumbnails 插槽内自行使用 CSS 布局。 */
-  thumbnailLayout?: 'horizontal' | 'grid'
-  /** @deprecated 旧版网格列数，仅 grid 布局生效；新代码请在 thumbnails 插槽内使用 CSS grid。 */
-  thumbnailColumns?: number
-  /** @deprecated 旧版单项样式；新代码请在 thumbnails 插槽内直接设置元素样式。 */
-  thumbnailItemStyle?: CSSProperties | ((page: number) => CSSProperties)
 }
 
 export interface PdfFlipbookState {

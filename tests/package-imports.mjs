@@ -71,6 +71,9 @@ try {
   await access(path.join(installed, 'dist/LICENSE.page-flip'))
   // 真正从 tarball 导入并 SSR 渲染，确保入口不提前求值浏览器 PDF.js。
   const libraryModule = await import(pathToFileURL(path.join(installed, packed.main)).href)
+  for (const name of ['thumbnailTarget', 'thumbnailLayout', 'thumbnailColumns', 'thumbnailItemStyle']) {
+    assert.ok(!Object.hasOwn(libraryModule.VuePdfFlipbook.props, name), `Removed prop ${name} must not be shipped at runtime`)
+  }
   const { createSSRApp } = await import('vue')
   const { renderToString } = await import('@vue/server-renderer')
   const initialHtml = await renderToString(createSSRApp(libraryModule.VuePdfFlipbook, { url: 'https://example.com/book.pdf' }))
@@ -98,12 +101,15 @@ const props: PdfFlipbookProps = {
   url: 'https://example.com/book.pdf', workerSrc: '/pdf.worker.mjs', initialMode: 'double',
   showPreviousButton: false, showNextButton: false, loadingText: '文档加载中…',
 }
+type RemovedThumbnailProps = 'thumbnailTarget' | 'thumbnailLayout' | 'thumbnailColumns' | 'thumbnailItemStyle'
+const removedPublicProps: Extract<RemovedThumbnailProps, keyof PdfFlipbookProps> extends never ? true : false = true
+const removedComponentProps: Extract<RemovedThumbnailProps, keyof InstanceType<typeof VuePdfFlipbook>['$props']> extends never ? true : false = true
 const thumbnail = {} as PdfThumbnailSlotProps
 const thumbnails = {} as PdfThumbnailsSlotProps
 const navigation: PdfPageNavigationSlotProps = { disabled: false, navigate: () => reader.value?.next() }
 state.value = reader.value?.getState()
 reader.value?.goToPage(1)
-export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail, thumbnails, navigation }
+export { plugin, VuePdfFlipbook, PdfCanvasPage, reader, state, props, thumbnail, thumbnails, navigation, removedPublicProps, removedComponentProps }
 `)
   const program = ts.createProgram([entry], {
     noEmit: true,

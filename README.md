@@ -650,7 +650,9 @@ function onError(error: unknown) {
 
 单项插槽外层仍有组件提供的可点击 `div`。不要在上例的点击监听中使用 `.stop`，否则事件无法传到该外层并自动跳页。需要完全控制外层宽高、键盘交互和跳页行为时，使用前述 `#thumbnails`。
 
-`#thumbnail` 的参数仍为 `PdfThumbnailSlotProps`：`page`、`pdf`、`isActive`、`shouldRender`。已有 `thumbnailTarget`、`thumbnailLayout`、`thumbnailColumns`、`thumbnailItemStyle` 保留兼容并标记为 deprecated；新代码优先迁移到 `#thumbnails`，该插槽会忽略这些旧配置。原有调用不需要立即修改。
+`#thumbnail` 的参数为 `PdfThumbnailSlotProps`：`page`、`pdf`、`isActive`、`shouldRender`，继续支持单项内容自定义。
+
+新版已移除曾标记为 `@deprecated` 的 `thumbnailTarget`、`thumbnailLayout`、`thumbnailColumns`、`thumbnailItemStyle`，不再提供这些参数的兼容逻辑。需要自定义挂载位置时，在 `#thumbnails` 内使用 Vue `Teleport`；横排、网格、列数以及单项宽高等样式由调用方自己的容器与 CSS 控制。上方完整列表示例已采用此方式。
 
 - 工具栏、进度滑块、键盘快捷键：调用翻页方法并监听状态事件。
 - 加载提示、错误提示、重试：监听状态或 `error`，调用 `reload()`。
