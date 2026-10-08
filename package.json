@@ -1,6 +1,6 @@
 {
   "name": "@agilehub/vue-pdf-flipbook",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "A minimal Vue 3 PDF flipbook with page-flip animation and public APIs for external controls.",
   "type": "module",
   "files": [
