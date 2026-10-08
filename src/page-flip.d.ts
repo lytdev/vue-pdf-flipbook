@@ -91,6 +91,8 @@ declare module 'page-flip' {
      * @returns void。
      */
     turnToPage(page: number): void
+    /** 内部性能控制；false 使用按需绘制，true 恢复翻页动画的连续绘制。 */
+    setContinuousRendering(enabled: boolean): void
     /** 查询引擎页码时调用；无参数，返回当前零基页索引。 */
     getCurrentPageIndex(): number
     /** 查询引擎页数时调用；无参数，返回已载入的页面数量。 */

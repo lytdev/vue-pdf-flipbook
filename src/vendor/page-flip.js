@@ -215,13 +215,27 @@ class g {
         const e = Math.round((t - this.animation.startedAt) / this.animation.durationFrame);
         e < this.animation.frames.length ? this.animation.frames[e]() : (this.animation.onAnimateEnd(), this.animation = null);
     } this.timer = t, this.drawFrame(); }
-    start() { this.stopped = false; this.update(); const t = e => { if (this.stopped)
-        return; this.render(e); if (!this.stopped)
-        this.frame = requestAnimationFrame(t); }; this.frame = requestAnimationFrame(t); }
-    stop() { this.stopped = true; cancelAnimationFrame(this.frame); this.animation = null; this.leftPage = this.rightPage = this.flippingPage = this.bottomPage = null; }
+    start() { this.stopped = false; this.update(); this.requestDraw(); }
+    // 静态阅读按需绘制；同一帧的跳页、尺寸和方向更新合并为一次 DOM 绘制。
+    requestDraw() {
+        if (this.stopped || this.frame !== undefined) return;
+        this.frame = requestAnimationFrame(t => {
+            this.frame = undefined;
+            if (this.stopped) return;
+            this.render(t);
+            if (this.continuousRendering !== false || this.animation !== null) this.requestDraw();
+        });
+    }
+    setContinuousRendering(t) {
+        if (this.continuousRendering === t) return;
+        if (t) this.timer = performance.now();
+        this.continuousRendering = t;
+        this.requestDraw();
+    }
+    stop() { this.stopped = true; cancelAnimationFrame(this.frame); this.frame = undefined; this.animation = null; this.leftPage = this.rightPage = this.flippingPage = this.bottomPage = null; }
     startAnimation(t, e, i) { this.finishAnimation(), this.animation = { frames: t, duration: e, durationFrame: e / t.length, onAnimateEnd: i, startedAt: this.timer }; }
     finishAnimation() { null !== this.animation && (this.animation.frames[this.animation.frames.length - 1](), null !== this.animation.onAnimateEnd && this.animation.onAnimateEnd()), this.animation = null; }
-    update() { this.boundsRect = null; const t = this.calculateBoundsRect(); this.orientation !== t && (this.orientation = t, this.app.updateOrientation(t)); }
+    update() { this.boundsRect = null; const t = this.calculateBoundsRect(); this.orientation !== t && (this.orientation = t, this.app.updateOrientation(t)); this.requestDraw(); }
     calculateBoundsRect() { let t = "landscape"; const e = this.getBlockWidth(), i = e / 2, s = this.getBlockHeight() / 2, n = this.setting.width / this.setting.height; let h = this.setting.width, r = this.setting.height, a = i - h; return "stretch" === this.setting.size ? (e < 2 * this.setting.minWidth && this.app.getSettings().usePortrait && (t = "portrait"), h = "portrait" === t ? this.getBlockWidth() : this.getBlockWidth() / 2, h > this.setting.maxWidth && (h = this.setting.maxWidth), r = h / n, r > this.getBlockHeight() && (r = this.getBlockHeight(), h = r * n), a = "portrait" === t ? i - h / 2 - h : i - h) : e < 2 * h && this.app.getSettings().usePortrait && (t = "portrait", a = i - h / 2 - h), this.boundsRect = { left: a, top: s - r / 2, width: 2 * h, height: r, pageWidth: h }, t; }
     setShadowData(t, e, i, s) { if (!this.app.getSettings().drawShadow)
         return; const n = 100 * this.getSettings().maxShadowOpacity; this.shadow = { pos: t, angle: e, width: 3 * this.getRect().pageWidth / 4 * i / 100, opacity: (100 - i) * n / 100 / 100, direction: s, progress: 2 * i }; }
@@ -234,8 +248,8 @@ class g {
     getOrientation() { return this.orientation; }
     setPageRect(t) { this.pageRect = t; }
     setDirection(t) { this.direction = t; }
-    setRightPage(t) { null !== t && t.setOrientation(1), this.rightPage = t; }
-    setLeftPage(t) { null !== t && t.setOrientation(0), this.leftPage = t; }
+    setRightPage(t) { null !== t && t.setOrientation(1), this.rightPage = t; this.requestDraw(); }
+    setLeftPage(t) { null !== t && t.setOrientation(0), this.leftPage = t; this.requestDraw(); }
     setBottomPage(t) { null !== t && t.setOrientation(1 === this.direction ? 0 : 1), this.bottomPage = t; }
     setFlippingPage(t) { null !== t && t.setOrientation(0 === this.direction && "portrait" !== this.orientation ? 0 : 1), this.flippingPage = t; }
     convertToBook(t) { const e = this.getRect(); return { x: t.x - e.left, y: t.y - e.top }; }
@@ -356,6 +370,8 @@ class x extends class {
     turnToPrevPage() { this.pages.showPrev(); }
     turnToNextPage() { this.pages.showNext(); }
     turnToPage(t) { this.pages.show(t); }
+    // 库内部使用：关闭动画时停止空闲帧循环，保留尺寸更新与直接跳页的绘制。
+    setContinuousRendering(t) { this.render?.setContinuousRendering(t); }
     flipNext(t = "top") { this.flipController.flipNext(t); }
     flipPrev(t = "top") { this.flipController.flipPrev(t); }
     flip(t, e = "top") { this.flipController.flipToPage(t, e); }

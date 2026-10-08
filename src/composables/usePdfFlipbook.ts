@@ -195,6 +195,9 @@ export function usePdfFlipbook(props: ResolvedFlipbookProps, emit: FlipbookEmit)
     onUpdate: engine.update,
   })
 
+  // 配置或实际单双栏方向变化时，同步引擎开销；正在进行的折页会在归位后暂停。
+  watch(animationEnabled, engine.syncAnimationMode)
+
   // 文件解析完成时页面仍可能是白色；等当前可见 Canvas 全部绘制后才移除遮罩。
   watch([engineInitialized, navigation.visiblePages, navigation.thumbnailReadyPages], () => {
     if (initialViewReady.value || !engineInitialized.value) return

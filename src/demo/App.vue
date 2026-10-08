@@ -167,6 +167,7 @@ function onKeydown(event: KeyboardEvent) {
               :show-previous-button="showPreviousButton"
               :show-next-button="showNextButton"
               loading-text="示例 课件 加载中…"
+              :flip-animation="{single:false,double:false}"
               height="100%"
               @state-change="updateState"
               @page-change="onPageChange"

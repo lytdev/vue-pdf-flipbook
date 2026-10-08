@@ -31,10 +31,27 @@ interface EngineEvents {
 export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, events: EngineEvents) {
   let pageFlip: PageFlip | undefined
   let pageCloneObserver: MutationObserver | undefined
+  let observingClones = false
   let removeInputGuards: (() => void) | undefined
   let engineState = 'read'
   let portrait = true
   let instantTouch: { x: number; y: number; forward: boolean } | undefined
+
+  /** 动画关闭且当前折页完成后暂停空闲帧和克隆监听；重新开启时恢复，无需重载 PDF。 */
+  function syncAnimationMode() {
+    if (!pageFlip) return
+    const active = events.isAnimationEnabled() || engineState !== 'read'
+    pageFlip.setContinuousRendering(active)
+    pageFlip.getSettings().showPageCorners = active
+    pageFlip.getSettings().drawShadow = active
+    if (active && !observingClones && flipbookElement.value && pageCloneObserver) {
+      pageCloneObserver.observe(flipbookElement.value, { childList: true, subtree: true })
+      observingClones = true
+    } else if (!active && observingClones) {
+      pageCloneObserver?.disconnect()
+      observingClones = false
+    }
+  }
 
   /**
    * 使用 PDF 比例创建引擎，并注册 Canvas 克隆与输入监听。
@@ -95,6 +112,7 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
       }
     })
     pageCloneObserver.observe(flipbookElement.value, { childList: true, subtree: true })
+    observingClones = true
 
     // 翻页动画完成后，将引擎的零基页码同步到组件的一基页码。
     pageFlip.on('flip', ({ data }) => events.onFlip(Number(data)))
@@ -102,12 +120,14 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
       engineState = String(data)
       if (engineState === 'read' && pageFlip) pageFlip.getSettings().flippingTime = 820
       events.onStateChange(engineState)
+      syncAnimationMode()
     })
     pageFlip.on('changeOrientation', ({ data }) => {
       portrait = data !== 'landscape'
       events.onOrientationChange(data === 'landscape' ? 'double' : 'single')
     })
     pageFlip.loadFromHTML(pages)
+    syncAnimationMode()
 
     const element = flipbookElement.value
     /**
@@ -117,7 +137,7 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
      * @returns void；准入由导航层判断，已开始的拖动继续交给引擎处理。
      */
     const guard = (event: MouseEvent | TouchEvent) => {
-      if (!events.isAnimationEnabled()) {
+      if (!events.isAnimationEnabled() && engineState === 'read') {
         // 禁用动画时不让引擎开始折页；书页输入改走导航层以保留预加载和事件同步。
         event.stopImmediatePropagation()
         if (event.type === 'mousemove') return
@@ -185,6 +205,7 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     engineState = 'read'
     pageCloneObserver?.disconnect()
     pageCloneObserver = undefined
+    observingClones = false
     const previous = pageFlip
     pageFlip = undefined
     previous?.destroy()
@@ -204,10 +225,11 @@ export function usePageFlip(flipbookElement: Ref<HTMLElement | undefined>, event
     pageFlip.getSettings().minWidth = events.getLayoutMode() === 'single'
       ? Math.max(1, flipbookElement.value.clientWidth) : 1
     pageFlip.update()
+    syncAnimationMode()
   }
 
   return {
-    initialize, destroy,
+    initialize, destroy, syncAnimationMode,
     /** 导航层翻页前调用；无参数，返回引擎实例是否存在。 */
     isReady: () => pageFlip !== undefined,
     update,
