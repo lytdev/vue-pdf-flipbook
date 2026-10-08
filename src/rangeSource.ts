@@ -1,6 +1,7 @@
 import { withTimeout } from './withTimeout'
 
-export const rangeChunkSize = 64 * 1024
+// 256 KB 兼顾按需读取与网络往返次数，减少图片、字体跨多个小段时的串行等待。
+export const rangeChunkSize = 256 * 1024
 
 /**
  * 解析并验证 PDF 原始字节数，拒绝缺失或非法长度。
@@ -70,7 +71,8 @@ async function readChunk(response: Response, expected: number): Promise<Uint8Arr
 async function requestRange(url: string, begin: number, end: number, signal: AbortSignal) {
   const response = await fetch(url, {
     headers: { Range: `bytes=${begin}-${end - 1}` },
-    cache: 'no-store',
+    // 遵守服务器缓存策略；不要强制让刷新与重复阅读都重新下载可缓存的字节段。
+    cache: 'default',
     signal,
   })
   // 服务器若忽略 Range 返回全文，立即取消响应体，避免退化为大文件完整下载。

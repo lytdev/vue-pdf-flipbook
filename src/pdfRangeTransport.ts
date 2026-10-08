@@ -15,9 +15,13 @@ export async function createPdfRangeTransport(
   onError: (error: unknown) => void,
   fileSize?: number,
 ) {
-  const source = await openRangeSource(url, controller.signal, fileSize)
-  // 浏览器挂载后才执行 PDF.js，SSR 导入组件不会访问 DOMMatrix。
-  const { PDFDataRangeTransport } = await import('pdfjs-dist')
+  // 网络探测与模块加载独立进行，避免首段下载完成后才开始获取 PDF.js。
+  // 仍仅在浏览器挂载后执行，SSR 导入组件不会访问 DOMMatrix。
+  const [source, { PDFDataRangeTransport }] = await Promise.all([
+    openRangeSource(url, controller.signal, fileSize),
+    import('pdfjs-dist'),
+  ])
+  controller.signal.throwIfAborted()
   class RangeTransport extends PDFDataRangeTransport {
     /**
      * 按 PDF.js 请求读取字节段，完成后通知 onDataRange。

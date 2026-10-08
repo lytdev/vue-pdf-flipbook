@@ -18,7 +18,8 @@ test('CORS-hidden range headers use supplied original size; every GET carries a 
   assert.equal(source.initialData.length, rangeChunkSize)
   assert.equal((await source.read(rangeChunkSize, rangeChunkSize * 2)).length, rangeChunkSize)
   assert.deepEqual(requests.map((request) => request.method === 'HEAD' ? 'HEAD' : new Headers(request.headers).get('Range')),
-    ['bytes=0-65535', 'bytes=65536-131071'])
+    [`bytes=0-${rangeChunkSize - 1}`, `bytes=${rangeChunkSize}-${rangeChunkSize * 2 - 1}`])
+  assert.ok(requests.every((request) => request.cache === 'default'), 'range reads should respect HTTP caching')
 })
 
 test('missing Content-Range never falls back to a potentially compressed HEAD size', async (t) => {
@@ -74,7 +75,7 @@ test('abort signal reaches the probe and later requests', async (t) => {
     assert.ok(init.signal instanceof AbortSignal)
     init.signal?.throwIfAborted()
     return new Response(new Uint8Array(rangeChunkSize), {
-      status: 206, headers: { 'Content-Range': `bytes 0-65535/${length}` },
+      status: 206, headers: { 'Content-Range': `bytes 0-${rangeChunkSize - 1}/${length}` },
     })
   })
   const source = await openRangeSource(url, controller.signal)

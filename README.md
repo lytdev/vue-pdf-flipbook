@@ -433,7 +433,9 @@ function onError(error: unknown) {
 
 连续请求相同或重叠的目标窗口会保留已完成的渲染记录。书页点击、拖拽也会检查动画必需页面：未准备好时保留当前页，通过 `pageLoading` 提示外部，准备完成后自动翻页；已准备好时保留原有拖拽交互。尚未绘制的 Canvas 隐藏，避免显示黑色底图。
 
-组件使用自定义 `PDFDataRangeTransport`：第一次请求就带 `Range: bytes=0-65535`，之后只请求 PDF.js 所需的字节段，关闭流式下载和自动预取。请求按 64 KiB 对齐，PDF.js 可能合并相邻段。每段校验 HTTP `206`、长度以及浏览器可见的 `Content-Range`；收到 `200` 时立即取消响应并报告错误，不再回退到整文件下载。
+组件使用自定义 `PDFDataRangeTransport`：第一次请求就带 `Range: bytes=0-262143`，之后只请求 PDF.js 所需的字节段，关闭流式下载和自动预取。请求按 256 KiB 对齐，PDF.js 可能合并相邻段，减少大图、字体跨多个小段时的网络往返。每段校验 HTTP `206`、长度以及浏览器可见的 `Content-Range`；收到 `200` 时立即取消响应并报告错误，不再回退到整文件下载。
+
+首段下载与 PDF.js/Worker 模块加载并行进行。分段请求遵守服务器的 HTTP 缓存策略，组件不再强制 `no-store`；实际缓存命中仍取决于浏览器、服务器响应头及开发者工具是否启用“停用缓存”。Network 中的多条 PDF 请求对应字节段，不是一条请求对应一页。排查慢请求时分别检查排队、等待首字节（TTFB）和下载耗时：较长的 TTFB 常需检查 CDN 命中及源站响应；图像较大的 PDF 还受下载带宽影响。
 
 跨域服务器必须允许 CORS 和 Range 请求。建议 OSS/CDN 的 `Access-Control-Expose-Headers` 包含 `Content-Range, Accept-Ranges, Content-Length, Content-Encoding, ETag`，PDF 的 `Content-Type` 设置为 `application/pdf`。组件优先从 `Content-Range` 获取总长度，不再依赖浏览器是否能读到 `Accept-Ranges`。
 

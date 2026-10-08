@@ -95,3 +95,36 @@ test('interleaved instances apply worker configuration immediately before creati
   first.scope.stop()
   second.scope.stop()
 })
+
+test('runtime loading starts before the first PDF range finishes', async (t) => {
+  const range = deferred<Awaited<ReturnType<Dependencies['range']>>>()
+  const fixture = setup({ range: () => range.promise })
+  t.after(() => fixture.scope.stop())
+  const original = fixture.deps.runtime
+  let runtimeStarted = false
+  fixture.deps.runtime = () => { runtimeStarted = true; return original() }
+  const loading = fixture.reader.load()
+  assert.equal(runtimeStarted, true, 'runtime download must overlap the slow network probe')
+  assert.deepEqual(fixture.usedWorkers, [], 'PDF worker creation still waits for a valid range')
+  range.resolve({} as Awaited<ReturnType<Dependencies['range']>>)
+  await loading
+  assert.equal(fixture.reader.pageCount.value, 5)
+})
+
+test('runtime failure aborts the parallel range request and reports one error', async (t) => {
+  let signal: AbortSignal | undefined
+  const fixture = setup({ range: (_url, controller) => {
+    signal = controller.signal
+    return new Promise((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true })
+    })
+  } })
+  t.after(() => fixture.scope.stop())
+  fixture.deps.runtime = async () => { throw new Error('runtime unavailable') }
+  await fixture.reader.load()
+  assert.equal(signal?.aborted, true)
+  assert.equal(fixture.errors.length, 1)
+  assert.match(String(fixture.errors[0]), /runtime unavailable/)
+  assert.equal(fixture.reader.loading.value, false)
+  assert.deepEqual(fixture.usedWorkers, [])
+})

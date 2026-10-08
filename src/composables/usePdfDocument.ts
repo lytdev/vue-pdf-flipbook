@@ -78,19 +78,21 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
     try {
       events.onReset()
       if (!props.url) throw new Error('请提供有效的 PDF URL')
-      const range = await dependencies.range(props.url, controller, (error) => {
-        if (!isCurrent()) return
-        rangeFailed = true
-        loading.value = false
-        errorMessage.value = error instanceof Error ? error.message : 'PDF 分段加载失败'
-        pdf.value = undefined
-        pageCount.value = 0
-        releaseTask()
-        events.onRangeError()
-        events.onError(error)
-      }, props.fileSize)
-      if (!isCurrent()) return
-      const { GlobalWorkerOptions, getDocument, workerSrc } = await dependencies.runtime()
+      // 并行准备首段和运行时（含内置 Worker 模块），降低刷新时的串行启动开销。
+      const [range, { GlobalWorkerOptions, getDocument, workerSrc }] = await Promise.all([
+        dependencies.range(props.url, controller, (error) => {
+          if (!isCurrent()) return
+          rangeFailed = true
+          loading.value = false
+          errorMessage.value = error instanceof Error ? error.message : 'PDF 分段加载失败'
+          pdf.value = undefined
+          pageCount.value = 0
+          releaseTask()
+          events.onRangeError()
+          events.onError(error)
+        }, props.fileSize),
+        dependencies.runtime(),
+      ])
       if (!isCurrent() || controller.signal.aborted) return
       // 配置与创建之间不再 await，防止其他实例覆盖本轮 Worker 地址。
       GlobalWorkerOptions.workerSrc = props.workerSrc || workerSrc
