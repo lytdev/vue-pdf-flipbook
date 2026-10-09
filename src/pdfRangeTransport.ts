@@ -1,4 +1,5 @@
 import { openRangeSource } from './rangeSource'
+import { loadPdfRuntime } from './loadPdfRuntime'
 
 /**
  * 将可校验的分段数据源适配为 PDF.js 数据传输对象。
@@ -19,7 +20,7 @@ export async function createPdfRangeTransport(
   // 仍仅在浏览器挂载后执行，SSR 导入组件不会访问 DOMMatrix。
   const [source, { PDFDataRangeTransport }] = await Promise.all([
     openRangeSource(url, controller.signal, fileSize),
-    import('pdfjs-dist'),
+    loadPdfRuntime(),
   ])
   controller.signal.throwIfAborted()
   class RangeTransport extends PDFDataRangeTransport {

@@ -9,12 +9,15 @@ import { build, createServer } from 'vite'
 
 async function checkWorker(code) {
   assert.ok(!/['"]\/assets\/pdf\.worker/.test(code), 'Worker must not use a host-root asset path')
-  const url = code.match(/data:(?:text|application)\/javascript[^"'\s]*;base64,[A-Za-z0-9+/=]+/)?.[0]
-  assert.ok(url, 'Worker must be embedded in the published module')
-  const response = await fetch(url)
-  assert.ok((await response.text()).includes('WorkerMessageHandler'))
-  const worker = await import(url)
-  assert.ok(worker.WorkerMessageHandler, 'Embedded worker must be an executable module')
+  const urls = [...code.matchAll(/data:(?:text|application)\/javascript[^"'\s]*;base64,[A-Za-z0-9+/=]+/g)]
+    .map((match) => match[0])
+  assert.equal(new Set(urls).size, 2, 'Modern and legacy workers must both be embedded')
+  for (const url of urls) {
+    const response = await fetch(url)
+    assert.ok((await response.text()).includes('WorkerMessageHandler'))
+    const worker = await import(url)
+    assert.ok(worker.WorkerMessageHandler, 'Embedded worker must be an executable module')
+  }
 }
 
 const root = fileURLToPath(new URL('../', import.meta.url))
@@ -62,12 +65,17 @@ try {
     visit(source)
     return shader
   }
-  const originalShader = shaderText('pdf.mjs', await readFile(path.join(root, 'node_modules/pdfjs-dist/build/pdf.mjs'), 'utf8'))
-  const pdfChunk = chunks.find((name) => /^pdf-.*\.js$/.test(name))
-  assert.ok(pdfChunk, 'Bundled PDF.js chunk must exist')
-  const bundledShader = shaderText(pdfChunk, await readFile(path.join(installed, 'dist', pdfChunk), 'utf8'))
-  assert.ok(originalShader && bundledShader && originalShader === bundledShader,
-    'Bundled PDF.js shader text must match the dependency source')
+  for (const [sourceFile, chunkPrefix] of [
+    ['build/pdf.mjs', 'pdfRuntime-'],
+    ['legacy/build/pdf.mjs', 'pdfLegacyRuntime-'],
+  ]) {
+    const originalShader = shaderText(sourceFile, await readFile(path.join(root, 'node_modules/pdfjs-dist', sourceFile), 'utf8'))
+    const pdfChunk = chunks.find((name) => name.startsWith(chunkPrefix))
+    assert.ok(pdfChunk, `Bundled PDF.js chunk ${chunkPrefix} must exist`)
+    const bundledShader = shaderText(pdfChunk, await readFile(path.join(installed, 'dist', pdfChunk), 'utf8'))
+    assert.ok(originalShader && bundledShader && originalShader === bundledShader,
+      `Bundled PDF.js shader text must match ${sourceFile}`)
+  }
   await access(path.join(installed, 'dist/LICENSE.page-flip'))
   // 真正从 tarball 导入并 SSR 渲染，确保入口不提前求值浏览器 PDF.js。
   const libraryModule = await import(pathToFileURL(path.join(installed, packed.main)).href)

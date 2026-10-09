@@ -96,6 +96,34 @@ test('interleaved instances apply worker configuration immediately before creati
   second.scope.stop()
 })
 
+test('reload waits for the previous PDF worker to finish destroying', async () => {
+  const fixture = setup()
+  await fixture.reader.load()
+  const destruction = deferred<void>()
+  const originalRuntime = fixture.deps.runtime
+  let created = 0
+  fixture.deps.runtime = async () => {
+    const runtime = await originalRuntime()
+    return {
+      ...runtime,
+      getDocument: (...args: Parameters<typeof runtime.getDocument>) => {
+        created += 1
+        const task = runtime.getDocument(...args)
+        return created === 1 ? { ...task, destroy: () => destruction.promise } : task
+      },
+    }
+  }
+  // 第一轮使用可控的 destroy，以便检查第二轮的 Worker 创建顺序。
+  await fixture.reader.load()
+  const nextLoad = fixture.reader.load()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(created, 1)
+  destruction.resolve()
+  await nextLoad
+  assert.equal(created, 2)
+  fixture.scope.stop()
+})
+
 test('runtime loading starts before the first PDF range finishes', async (t) => {
   const range = deferred<Awaited<ReturnType<Dependencies['range']>>>()
   const fixture = setup({ range: () => range.promise })

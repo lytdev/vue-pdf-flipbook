@@ -4,6 +4,7 @@ import { createPdfRangeTransport } from '../pdfRangeTransport'
 import { rangeChunkSize } from '../rangeSource'
 import { maxDocumentPages } from '../runtimeLimits'
 import { withTimeout } from '../withTimeout'
+import { loadPdfRuntime } from '../loadPdfRuntime'
 import type { PageSize, ResolvedFlipbookProps } from './types'
 
 interface DocumentEvents {
@@ -28,7 +29,7 @@ interface DocumentEvents {
  * @returns 只读文档状态及 load 方法。
  */
 export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEvents, dependencies = {
-  runtime: () => import('../pdfRuntime'),
+  runtime: loadPdfRuntime,
   range: createPdfRangeTransport,
 }) {
   // PDF.js 实例保留原始对象，只跟踪引用变化，避免被 Vue 深度代理。
@@ -39,16 +40,18 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
   const loadProgress = ref(0)
   const errorMessage = ref('')
   let loadingTask: PDFDocumentLoadingTask | undefined
+  let taskDestruction: Promise<void> = Promise.resolve()
   let rangeController: AbortController | undefined
   let loadRevision = 0
 
-  /** 分离旧任务引用并接住同步/异步销毁异常；卸载时也不会遗留拒绝。 */
+  /** 串行销毁旧任务；新任务须等待 PDF.js 完成 Worker 终止。 */
   function releaseTask() {
     const task = loadingTask
     loadingTask = undefined
-    if (task) void Promise.resolve().then(() => task.destroy()).catch((error: unknown) => {
+    if (task) taskDestruction = taskDestruction.then(() => task.destroy()).catch((error: unknown) => {
       console.error('[vue-pdf-flipbook] PDF 资源释放失败', error)
     })
+    return taskDestruction
   }
 
   /**
@@ -68,7 +71,7 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
     const isCurrent = () => revision === loadRevision
 
     // 先清空旧导航和引擎，再公布本轮加载状态。
-    releaseTask()
+    const previousTaskDestroyed = releaseTask()
     pdf.value = undefined
     pageCount.value = 0
     errorMessage.value = ''
@@ -92,6 +95,7 @@ export function usePdfDocument(props: ResolvedFlipbookProps, events: DocumentEve
           events.onError(error)
         }, props.fileSize),
         dependencies.runtime(),
+        previousTaskDestroyed,
       ])
       if (!isCurrent() || controller.signal.aborted) return
       // 配置与创建之间不再 await，防止其他实例覆盖本轮 Worker 地址。
